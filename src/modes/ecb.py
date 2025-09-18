@@ -4,6 +4,9 @@ from Crypto.Cipher import AES
 BLOCK_SIZE = 16 # 128 bit
 
 
+''' Реализация режима ECB для AES-128 и реализация паддинга по стандарту PKCS7'''
+
+
 def pad(data: bytes) -> bytes:
     # Паддинг по PKCS#7.
     if len(data) % BLOCK_SIZE == 0:
@@ -50,7 +53,7 @@ def encrypt_file_ecb(input_file: str, output_file: str, key_text: str):
         exit(1)
 
 
-def decrypt_file_ecb(input_file:str, output_file: str,  key_text: str):
+def decrypt_file_ecb(input_file: str, output_file: str,  key_text: str):
     key = key_text.encode()
 
     if len(key) != 16:
@@ -79,11 +82,3 @@ def decrypt_file_ecb(input_file:str, output_file: str,  key_text: str):
     except Exception as e:
         print(f"Ошибка: {e}")
         exit(1)
-
-
-def main():
-    ...
-
-
-if __name__ == "__main__":
-    main()
