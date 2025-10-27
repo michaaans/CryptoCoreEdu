@@ -12,12 +12,6 @@ class ECBMode:
 
     def __init__(self, key: bytes):
 
-        # if isinstance(key, str):
-        #     key = key.encode()
-
-        # if len(key) != self.BLOCK_SIZE:
-        #     raise ValueError("ECB mode key must be 16 bytes long")
-
         self.key = key
         self.cipher = AES.new(self.key, AES.MODE_ECB)
 
