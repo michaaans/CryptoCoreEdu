@@ -4,9 +4,9 @@ import sys
 def extract_iv(filename):
     with open(filename, 'rb') as f:
         iv = f.read(16)
-        print("IV в hex формате:")
+        print(" [INFO] IV в hex формате:")
         print(iv.hex())
-        print("\nIV для команды:")
+        print("\n [INFO] IV для команды:")
         print(f"--iv {iv.hex()}")
 
 

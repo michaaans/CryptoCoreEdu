@@ -1,9 +1,11 @@
+import os
+
 from Crypto.Cipher import AES
 from pathlib import Path
 
-import os
 from ..file_io import read_file, write_file
-import sys
+from ..utils import PKCS7Padding
+from ..exceptions import CryptoOperationError
 
 
 class CBCMode:
@@ -12,59 +14,23 @@ class CBCMode:
     BLOCK_SIZE = 16
 
     def __init__(self, key: bytes):
+
         self.key = key
-        # Создаем базовый cipher для шифрования/дешифрования отдельных блоков
         self.cipher = AES.new(self.key, AES.MODE_ECB)
+        self.padding = PKCS7Padding
 
-    def constant_time_compare(self, a: bytes, b: bytes) -> bool:
-        if len(a) != len(b):
-            return False
-
-        result = 0
-
-        for x, y in zip(a, b):
-            result |= x ^ y
-
-        return result == 0
-
-    def pad(self, data: bytes) -> bytes:
-        # Паддинг по PKCS#7.
-        if len(data) % self.BLOCK_SIZE == 0:
-            pad_len = self.BLOCK_SIZE
-        else:
-            pad_len = self.BLOCK_SIZE - (len(data) % self.BLOCK_SIZE)
-        return data + bytes([pad_len] * pad_len)
-
-    def unpad(self, data: bytes) -> bytes:
-        # Удаление паддинга по PKCS#7.
-        if not data:
-            return data
-        pad_len = data[-1]
-
-        # Проверка корректности дополнения
-        if pad_len > self.BLOCK_SIZE or pad_len == 0:
-            raise ValueError("Ошибка: Некорректное дополнение")
-
-        expected_padding = bytes([pad_len] * pad_len)
-        actual_padding = data[-pad_len:]
-
-        if not self.constant_time_compare(expected_padding, actual_padding):
-            raise ValueError("Ошибка: Некорректное дополнение")
-
-        return data[:-pad_len]
-
-    def encrypt_file(self, input_file: Path, output_file: Path, iv: bytes) -> None:
+    def encrypt_file(self, input_file: Path, output_file: Path) -> None:
         try:
             plaintext = read_file(input_file)
-            padded_data = self.pad(plaintext)
+            padded_data = self.padding.pad(plaintext)
 
             # Генерируем случайный IV если не предоставлен
-            if iv is None:
-                iv = os.urandom(self.BLOCK_SIZE)
+
+            iv = os.urandom(self.BLOCK_SIZE)
 
             # Проверяем корректность IV
             if len(iv) != self.BLOCK_SIZE:
-                raise ValueError(f"Ошибка: IV должен быть длиной {self.BLOCK_SIZE} байт")
+                raise CryptoOperationError(f"IV должен быть длиной {self.BLOCK_SIZE} байт")
 
             encrypted_blocks = []
             previous_block = iv
@@ -85,11 +51,9 @@ class CBCMode:
             write_file(output_file, iv + b''.join(encrypted_blocks))
 
         except (FileNotFoundError, ValueError, IOError) as error:
-            print(f'Ошибка при работе с файлами или данными: {error}')
-            sys.exit(1)
+            raise CryptoOperationError(f"Ошибка при шифровании режимом CBC: {error}")
         except Exception as error:
-            print(f'Неизвестная ошибка: {error}')
-            sys.exit(1)
+            raise CryptoOperationError(f"Неизвестная ошибка при шифровании CBC: {error}")
 
     def decrypt_file(self, input_file: Path, output_file: Path, iv: bytes) -> None:
         try:
@@ -97,7 +61,7 @@ class CBCMode:
 
             # Проверяем минимальный размер данных
             if len(ciphertext) < self.BLOCK_SIZE:
-                raise ValueError("Ошибка: файл слишком короткий для CBC режима")
+                raise CryptoOperationError("Файл слишком короткий для CBC режима")
 
             # Извлекаем IV из начала файла или используем предоставленный
             if iv is None:
@@ -109,9 +73,11 @@ class CBCMode:
                 file_iv = iv
                 ciphertext_blocks = ciphertext[self.BLOCK_SIZE:]
 
-            # Проверяем корректность размера данных
+            if len(ciphertext_blocks) == 0:
+                raise CryptoOperationError("Файл не содержит данных для дешифрования")
+
             if len(ciphertext_blocks) % self.BLOCK_SIZE != 0:
-                raise ValueError("Ошибка: Некорректный размер шифртекста")
+                raise CryptoOperationError("Некорректный размер шифртекста")
 
             decrypted_blocks = []
             previous_block = file_iv
@@ -125,18 +91,17 @@ class CBCMode:
 
                 # XOR с предыдущим зашифрованным блоком (или IV для первого блока)
                 plain_block = bytes(a ^ b for a, b in zip(decrypted_block, previous_block))
+
                 decrypted_blocks.append(plain_block)
                 previous_block = block
 
             # Объединяем и удаляем паддинг
             decrypted_data = b''.join(decrypted_blocks)
-            unpadded_data = self.unpad(decrypted_data)
+            unpadded_data = self.padding.unpad(decrypted_data)
 
             write_file(output_file, unpadded_data)
 
         except (FileNotFoundError, ValueError, IOError) as error:
-            print(f'Ошибка при работе с файлами или данными: {error}')
-            sys.exit(1)
+            raise CryptoOperationError(f"Ошибка при дешифровании режимом CBC: {error}")
         except Exception as error:
-            print(f'Неизвестная ошибка: {error}')
-            sys.exit(1)
+            raise CryptoOperationError(f"Неизвестная ошибка при дешифровании CBC: {error}")
