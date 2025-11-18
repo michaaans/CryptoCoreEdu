@@ -1,6 +1,3 @@
-"""
-Валидаторы для ключей, IV и файлов
-"""
 
 from pathlib import Path
 import os

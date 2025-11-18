@@ -1,14 +1,4 @@
-# from .modes.ECBMode import ECBMode
-# from .modes.CBCMode import CBCMode
-# # from .modes.CFBMode import CFBMode
-# # from .modes.OFBMode import OFBMode
-# # from .modes.CTRMode import CTRMode
-#
-# from pathlib import Path
-#
-# import argparse
-# import os
-# import sys
+
 from pathlib import Path
 
 from .cli_parser import create_parser
@@ -23,11 +13,10 @@ from .utils.validators import validate_hex_key, validate_hex_iv, validate_file_p
 from .file_io import print_error, print_warning, print_success
 from .modes.ECBMode import ECBMode
 from .modes.CBCMode import CBCMode
-# from .modes.CFBMode import CFBMode
-# from .modes.OFBMode import OFBMode
-# from .modes.CTRMode import CTRMode
+from .modes.CFBMode import CFBMode
+from .modes.OFBMode import OFBMode
+from .modes.CTRMode import CTRMode
 
-import os
 import sys
 
 
@@ -122,12 +111,12 @@ class CryptoApp:
                     return ECBMode(key)
                 elif mode == 'cbc':
                     return CBCMode(key)
-                # elif mode == 'cfb':
-                #     return CFBMode(key)
-                # elif mode == 'ofb':
-                #     return OFBMode(key)
-                # elif mode == 'ctr':
-                #     return CTRMode(key)
+                elif mode == 'cfb':
+                    return CFBMode(key)
+                elif mode == 'ofb':
+                    return OFBMode(key)
+                elif mode == 'ctr':
+                    return CTRMode(key)
                 else:
                     raise ModeNotImplementedError(f"Режим {mode} пока не реализован")
             else:
@@ -191,9 +180,7 @@ class CryptoApp:
 
 
 def main():
-    """
-    Точка входа в приложение
-    """
+
     app = CryptoApp()
     app.run()
 

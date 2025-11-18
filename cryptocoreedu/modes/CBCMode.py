@@ -71,7 +71,7 @@ class CBCMode:
             else:
                 # Используем предоставленный IV
                 file_iv = iv
-                ciphertext_blocks = ciphertext[self.BLOCK_SIZE:]
+                ciphertext_blocks = ciphertext
 
             if len(ciphertext_blocks) == 0:
                 raise CryptoOperationError("Файл не содержит данных для дешифрования")
