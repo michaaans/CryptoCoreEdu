@@ -24,18 +24,23 @@ def write_file(file_path: Path, data: bytes) -> None:
 
 def print_error(message: str, details: str = None):
     """Единообразный вывод ошибок"""
-    print(f" [ERROR] {message}", file=sys.stderr)
+    print(f"[ERROR] {message}", file=sys.stderr)
     if details:
-        print(f" [DETAILS] {details}", file=sys.stderr)
+        print(f"[DETAILS] {details}", file=sys.stderr)
     print()
 
 
 def print_warning(message: str):
     """Единообразный вывод предупреждений"""
-    print(f" [WARNING] {message}")
+    print(f"[WARNING] {message}")
+
+
+def print_info(message: str):
+    """Вывод информационного сообщения"""
+    print(f"[INFO] {message}")
 
 
 def print_success(operation: str, input_path: Path, output_path: Path, mode: str):
     """Вывод успешной операции"""
-    print(f" [INFO] Файл успешно {operation} в режиме {mode.upper()}")
-    print(f" [INFO] Входной файл: {input_path} -> Выходной файл: {output_path}")
+    print(f"[INFO] Файл успешно {operation} в режиме {mode.upper()}")
+    print(f"[INFO] Входной файл: {input_path} -> Выходной файл: {output_path}")

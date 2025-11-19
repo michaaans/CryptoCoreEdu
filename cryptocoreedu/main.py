@@ -10,7 +10,8 @@ from .exceptions import KeyValidationError, \
 
 from .utils.validators import validate_hex_key, validate_hex_iv, validate_file_path
 
-from .file_io import print_error, print_warning, print_success
+from .file_io import print_error, print_warning, print_success, print_info
+from .csprng import generate_random_bytes
 from .modes.ECBMode import ECBMode
 from .modes.CBCMode import CBCMode
 from .modes.CFBMode import CFBMode
@@ -36,16 +37,54 @@ class CryptoApp:
         'mode_initialization': 107,
         'operation': 108,
         'unknown_operation': 109,
-        'critical': 110
+        'critical': 110,
+        'key_required': 111,
+        'rng_error': 112
     }
 
     def __init__(self):
         self.parser = create_parser()
 
+    def validate_key_argument(self, args):
+        """
+        Валидация аргумента ключа согласно новым требованиям
+        """
+        # Для дешифрования ключ обязателен
+        if args.decrypt and not args.key:
+            print_error("Ключ обязателен для дешифрования")
+            sys.exit(self.ERROR_CODES['key_required'])
+
+        # Для шифрования ключ может быть сгенерирован автоматически
+        if args.encrypt and not args.key:
+            try:
+                # Генерация случайного 16-байтного ключа
+                generated_key_bytes = generate_random_bytes(16)
+                generated_key_hex = generated_key_bytes.hex()
+
+                # Вывод сгенерированного ключа
+                print_info(f"Сгенерирован случайный ключ: {generated_key_hex}")
+
+                return generated_key_bytes
+
+            except Exception as e:
+                print_error("Ошибка генерации ключа", str(e))
+                sys.exit(self.ERROR_CODES['rng_error'])
+
+        # Если ключ предоставлен пользователем
+        if args.key:
+            try:
+                return validate_hex_key(args.key)
+            except KeyValidationError as e:
+                print_error("Некорректный ключ", str(e))
+                sys.exit(self.ERROR_CODES['key_validation'])
+
     def validate_arguments(self, args):
         """
         Валидация аргументов командной строки
         """
+
+        key = self.validate_key_argument(args)
+
         # Проверка корректности использования IV
         if args.encrypt and args.iv:
             if args.mode == 'ecb':
@@ -56,15 +95,6 @@ class CryptoApp:
         if args.decrypt and not args.iv:
             if args.mode != 'ecb':
                 print_warning(f"Для режима {args.mode.upper()} IV будет извлечен из файла")
-
-        # Валидация ключа
-        try:
-            key = validate_hex_key(args.key)
-
-        except KeyValidationError as e:
-
-            print_error("Некорректный ключ", str(e))
-            sys.exit(self.ERROR_CODES['key_validation'])
 
         # Валидация IV если передан
         iv = None

@@ -6,6 +6,7 @@ from pathlib import Path
 from ..file_io import read_file, write_file
 from ..utils import PKCS7Padding
 from ..exceptions import CryptoOperationError
+from ..csprng import generate_random_bytes
 
 
 class CBCMode:
@@ -26,7 +27,7 @@ class CBCMode:
 
             # Генерируем случайный IV если не предоставлен
 
-            iv = os.urandom(self.BLOCK_SIZE)
+            iv = generate_random_bytes(self.BLOCK_SIZE)
 
             # Проверяем корректность IV
             if len(iv) != self.BLOCK_SIZE:

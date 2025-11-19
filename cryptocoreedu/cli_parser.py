@@ -13,7 +13,7 @@ def create_parser():
     mode_group.add_argument('--encrypt', '-enc', action='store_true', help='Режим шифрования')
     mode_group.add_argument('--decrypt', '-dec', action='store_true', help='Режим дешифрования')
 
-    parser.add_argument('--key', '-k', required=True, help='Ключ шифрования (128-бит)')
+    parser.add_argument('--key', '-k', help='Ключ шифрования (128-бит)')
 
     parser.add_argument('--iv', help='Вектор инициализации (обязателен при дешифровании)')
 

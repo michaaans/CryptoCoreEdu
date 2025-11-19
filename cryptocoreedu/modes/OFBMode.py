@@ -1,10 +1,10 @@
-import os
 
 from Crypto.Cipher import AES
 from pathlib import Path
 
 from ..file_io import read_file, write_file
 from ..exceptions import CryptoOperationError
+from ..csprng import generate_random_bytes
 
 
 class OFBMode:
@@ -20,7 +20,7 @@ class OFBMode:
         try:
             plaintext = read_file(input_file)
 
-            iv = os.urandom(self.BLOCK_SIZE)
+            iv = generate_random_bytes(self.BLOCK_SIZE)
 
             if len(iv) != self.BLOCK_SIZE:
                 raise CryptoOperationError(f"IV должен быть длиной {self.BLOCK_SIZE} байт")
