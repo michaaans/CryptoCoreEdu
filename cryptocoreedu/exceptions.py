@@ -1,4 +1,3 @@
-
 class CryptoError(Exception):
     """Базовое исключение для ошибок криптобиблиотеки"""
     pass
@@ -26,4 +25,14 @@ class CryptoOperationError(CryptoError):
 
 class ModeNotImplementedError(CryptoError):
     """Ошибка неподдерживаемого режима"""
+    pass
+
+
+class UnsupportedAlgorithmError(CryptoError):
+    """Ошибка неподдерживаемого алгоритма хеширования"""
+    pass
+
+
+class HashOperationError(CryptoError):
+    """Ошибка выполнения операции хеширования"""
     pass

@@ -137,6 +137,48 @@ crypto -alg aes -m cfb -dec -k 000102030405060708090a0b0c0d0e0f -i tests/documen
 - `--input (-i)`: Входной файл
 - `--output (-o)`: Выходной файл
 
+### Команды хэширования
+
+```shell
+  # Хэширование без указания выходного файла (Windows)
+  crypto dgst -alg sha256 -i document.pdf
+  5d5b09f6dcb2d53a5fffc60c4ac0d55fb052072fa2fe5d95f011b5d5d5b0b0b5  document.pdf
+  # Хэширование с указанием выходного файла
+  crypto dgst -alg sha3-256 -i backup.tar -o backup.sha3
+```
+
+```bash
+   # Хэширование без указания выходного файла (Linux/MacOS/WSL)
+  crypto dgst -alg sha256 -i document.pdf
+  5d5b09f6dcb2d53a5fffc60c4ac0d55fb052072fa2fe5d95f011b5d5d5b0b0b5  document.pdf
+  # Хэширование с указанием выходного файла
+  crypto dgst -alg sha3-256 -i backup.tar -o backup.sha3
+```
+### Параметры хэш-функций и их особенности
+#### Параметры:
+- `--algorithm (-alg)`: Алгоритм хэширования (`sha256`, `sha3-256`)
+- `--input (-i)`: Входной файл
+- `--output (-o)`: Выходной файл (опционально)
+
+**Формат вывода хэша**:
+#### 5d5b09f6dcb2d53a5fffc60c4ac0d55fb052072fa2fe5d95f011b5d5d5b0b0b5  document.pdf
+
+#### Особенности:
+
+1. **Алгоритм SHA256**:
+   - Реализован в соответствии со стандартом NIST FIPS 180-4
+   - Использует конструкцию Меркля-Дамгарда
+   - корретно реализует схему дополнения
+   - реализует все константы SHA-256 и функции раундов.
+   - Размер чанка 8192 байт.
+   - Обработка больщих файлов (>1gb)
+
+2. **Алгоритм SHA3-256**:
+   - Реализован в соответствии со стандартом NIST FIPS 202
+   - Использует губчатую конструкцию Keccak
+   - Размер чанка 8192 байт.
+   - Обработка больщих файлов (>1gb)
+
 ### Размер ключа и IV
 Ключ должен быть ровно **16 байт** (32 hex-символа):
 ```
@@ -322,16 +364,87 @@ diff -s tests/plain.txt tests/decrypted.txt
       .....
     ```
 
+### Тестирование хэш-функций
+
+#### Тестирование хэш-функций sha256 и sha3-256 на тестовых векторах
+
+```bash
+   # Тестирование sha256 (Linux/MacOS/WSL)
+   ## Хэшируем пустой файл
+   crypto dgst -alg sha256 -i tests/empty.txt
+   # Ожидаемый вывод: e3b0c44298fc1c149afbf4c899cfb92427ae41e4649b934ca495991b7852b855 tests/empty.txt
+   
+   ## Хэшируем файл со строкой "abc"
+   crypto dgst -alg sha256 -i tests/test_one.txt
+   # Ожидаемый вывод: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  tests/test_one.txt
+   
+   ## Хэшируем файл со строкой "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+   crypto dgst -alg sha256 -i tests/test_two.txt
+   # Ожидаемый вывод: 248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1  tests/test_two.txt
+
+```
+
+```bash
+   # Тестирование sha3-256 (Linux/MacOS/WSL)
+   ## Хэшируем пустой файл
+   crypto dgst -alg sha3-256 -i tests/empty.txt
+   # Ожидаемый вывод: a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a tests/empty.txt
+   
+   ## Хэшируем файл со строкой "abc"
+   crypto dgst -alg sha3-256 -i tests/test_one.txt
+   # Ожидаемый вывод: 3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532  tests/test_one.txt
+   
+   ## Хэшируем файл со строкой "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+   crypto dgst -alg sha3-256 -i tests/test_two.txt
+   # Ожидаемый вывод: 41c0dba2a9d6240849100376a8235e2c82e1b9998a999e21db32dd97496d3376  tests/test_two.txt
+
+```
+
+#### Тестирование хэш-функций sha256 и sha3-256 на интероперабельность
+
+```bash
+   # Тестирование sha256 (Linux/MacOS/WSL)
+   # хэшируем пустой файл нашей реализацией
+   crypto dgst -alg sha256 -i tests/empty.txt -o tests/output_hash.txt
+   # хэшируем пустой файл с помощью sha256sum
+   sha256sum tests/empty.txt > tests/system_hash.txt
+   # проверяем идентичность
+   diff -s tests/output_hash.txt tests/system_hash.txt
+   #Ожидаемый вывод: Files tests/output_hash.txt and tests/system_hash.txt are identical
+```
+
+```bash
+   # Тестирование sha3-256 (Linux/MacOS/WSL)
+   # хэшируем пустой файл нашей реализацией
+   crypto dgst -alg sha3-256 -i tests/empty.txt -o tests/output_hash.txt
+   # хэшируем пустой файл с помощью sha3sum
+   sha3sum -a 256 tests/empty.txt > tests/system_hash.txt
+   # проверяем идентичность
+   diff -s tests/output_hash.txt tests/system_hash.txt
+   #Ожидаемый вывод: Files tests/output_hash.txt and tests/system_hash.txt are identical
+```
+
+#### Тестирование хэш-функций на файле ~1gb
+
+```bash
+   crypto dgst -alg sha256 -i tests/test1gb.txt
+   # Ожидаемый вывод: d5739a8da2a57adb3b9a38495a389894227f5e083efb541b0b4473faccd55225  tests/test1gb.txt
+   # Примерное время выполнение около 50-55 секунд
+```
+
 ## Структура проекта
 
 ```
 CryptoCoreEdu/
-├── cryptocoreedu/                  # Исходный код
-│   ├── main.py           # Точка входа
+├── cryptocoreedu/         # Исходный код
+│   ├── main.py            # Точка входа
+│   └── hash/
+│       ├──sha3-256.py     # Хэш-функция sha3-256
+│       ├──sha256.py       # Хэш-функция sha256
 │   └── utils/
 │       ├── padding.py     # Реализация паддинга по стандрату PKCS7
 │       ├── validators.py  # Валидаторы для ключей, IV и файлов
-│   └── modes/            # Реализации режимов шифрования
+│   └── modes/             # Реализации режимов шифрования
 │       ├── ECBMode.py        # Режим ECB
 │       ├── CBCMode.py        # Режим CBC
 │       ├── CFBMode.py        # Режим CFB
@@ -345,6 +458,7 @@ CryptoCoreEdu/
 ├── sts-2.1.2/            # Папка с тестами NIST (STS)
 ├── tests/                # Тесты
 │   └── plain.txt         # Файл plaintext'а
+│   └── test.txt          # Файл для хэша
 │   └── test_csprng.py    # Файл для теста уникальности ключа и IV
 ├── extract_iv.py         # Функция выжимки IV из файлов (для удобства)
 ├── setup.py              # Файл сборки проекта
@@ -358,6 +472,8 @@ CryptoCoreEdu/
 - **Python** 3.8 или выше
 - **pycryptodome** 3.23.0 или выше
 - **OpenSSL** (для тестирования совместимости)
+- **numba** 0.62.1 или выше (для оптимизации вычислений хэш-функций)
+- **numpy** 2.2.6 или выше (для оптимизации вычислений хэш-функций)
 
 ## Проверка целостности
 
@@ -394,6 +510,11 @@ diff -s tests/plain.txt tests/decrypted.txt
 
 * 112: Ошибка КСГПСЧ
 
+* 113: Ошибка алгоритма хэширования
+
+* 114: Ошибка операции хэширования
+
+* 115: Ошибка аргументов
 
 ## Важные заметки
 
@@ -402,6 +523,7 @@ diff -s tests/plain.txt tests/decrypted.txt
 - Всегда используйте надежные случайные ключи
 - Сохраняйте ключи в безопасном месте
 - Для генерации криктостойких ключей и IV используется системный источник энтропии (os.urandom()); гарантирует уникальность и непредсказуемость генерируемых значений
+- Скорость хэш-функций может быть гораздо ниже, чем в проверенных реализациях (hashlib, sha256sum и т.д.)
 
 ---
 
