@@ -19,6 +19,8 @@ from .modes.CTRMode import CTRMode
 from .hash.sha256 import sha256_file
 from .hash.sha3_256 import sha3_256_file
 
+from .mac.hmac import HMAC, hmac_file, verify_hmac, parse_hmac_file
+
 
 class CryptoApp:
     """
@@ -41,7 +43,11 @@ class CryptoApp:
         'rng_error': 112,
         'hash_algorithm_error': 113,
         'hash_operation_error': 114,
-        'crypto_args_required': 115
+        'crypto_args_required': 115,
+        'hmac_key_required': 116,
+        'hmac_key_invalid': 117,
+        'hmac_verification_failed': 118,
+        'verify_file_error': 119,
     }
 
     def __init__(self):
@@ -115,6 +121,65 @@ class CryptoApp:
                 sys.exit(self.ERROR_CODES['output_file'])
 
         return input_path, output_path
+
+    def validate_hmac_arguments(self, args):
+
+        # CLI-2: --key обязателен когда --hmac указан
+        if not args.key:
+            print_error(
+                "Ключ обязателен для HMAC",
+                "Укажите --key с hex-строкой ключа"
+            )
+            sys.exit(self.ERROR_CODES['hmac_key_required'])
+
+        if len(args.key.strip().lower()) % 2 != 0:
+            print_error(
+                "Некорректная длина ключа",
+                f"Hex строка должна иметь чётное количество символов."
+            )
+            sys.exit(self.ERROR_CODES['hmac_key_invalid'])
+
+        # Валидация hex ключа (CLI-2: ключ в hex формате)
+        try:
+            key_bytes = bytes.fromhex(args.key)
+        except ValueError as e:
+            print_error(
+                "Некорректный формат ключа",
+                f"Ключ должен быть в hex формате"
+            )
+            sys.exit(self.ERROR_CODES['hmac_key_invalid'])
+
+        # MAC-4: Поддержка ключей произвольной длины
+        if len(key_bytes) == 0:
+            print_error("Ключ не может быть пустым")
+            sys.exit(self.ERROR_CODES['hmac_key_invalid'])
+
+        # Валидация входного файла
+        try:
+            input_path = validate_file_path(args.input, for_reading=True)
+        except FileValidationError as e:
+            print_error("Проблема с входным файлом", str(e))
+            sys.exit(self.ERROR_CODES['input_file'])
+
+        # Валидация выходного файла (если указан)
+        output_path = None
+        if args.output:
+            try:
+                output_path = validate_file_path(args.output, for_reading=False)
+            except FileValidationError as e:
+                print_error("Проблема с выходным файлом", str(e))
+                sys.exit(self.ERROR_CODES['output_file'])
+
+        # Валидация файла верификации (CLI-4)
+        verify_path = None
+        if args.verify:
+            try:
+                verify_path = validate_file_path(args.verify, for_reading=True)
+            except FileValidationError as e:
+                print_error("Проблема с файлом верификации", str(e))
+                sys.exit(self.ERROR_CODES['verify_file_error'])
+
+        return key_bytes, input_path, output_path, verify_path
 
     def validate_key_argument(self, args):
 
@@ -230,6 +295,47 @@ class CryptoApp:
             print_error("Неизвестная ошибка при вычислении хеша", str(e))
             sys.exit(self.ERROR_CODES['hash_operation_error'])
 
+    def execute_hmac_operation(self, key: bytes, input_path: Path, output_path: Path = None, verify_path: Path = None):
+
+        try:
+            computed_hmac = hmac_file(key, str(input_path), chunk_size=131072)
+
+            if verify_path:
+                try:
+                    expected_hmac, _ = parse_hmac_file(str(verify_path))
+                except ValueError as e:
+                    print_error("Ошибка парсинга файла верификации", str(e))
+                    sys.exit(self.ERROR_CODES['verify_file_error'])
+                except FileNotFoundError:
+                    print_error("Файл верификации не найден", str(verify_path))
+                    sys.exit(self.ERROR_CODES['verify_file_error'])
+
+                if verify_hmac(expected_hmac, computed_hmac):
+                    print("[OK] Проверка HMAC успешна")
+                    sys.exit(0)
+                else:
+                    print("[ERROR] Проверка HMAC неверна", file=sys.stderr)
+                    sys.exit(self.ERROR_CODES['hmac_verification_failed'])
+
+            output_line = f"{computed_hmac}  {input_path}\n"
+
+            if output_path:
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(output_line)
+                print_info(f"HMAC-SHA256 записан в файл: {output_path}")
+            else:
+                print(output_line, end='')
+
+        except PermissionError as e:
+            print_error("Ошибка доступа к файлу", str(e))
+            sys.exit(self.ERROR_CODES['input_file'])
+        except FileNotFoundError as e:
+            print_error("Файл не найден", str(e))
+            sys.exit(self.ERROR_CODES['input_file'])
+        except Exception as e:
+            print_error("Ошибка при вычислении HMAC", str(e))
+            sys.exit(self.ERROR_CODES['hash_operation_error'])
+
     def run(self):
         """
         Главный метод запуска приложения
@@ -240,9 +346,16 @@ class CryptoApp:
 
             # Если вызвана подкоманда dgst
             if args.command == 'dgst':
-                # Обработка команд хеширования
-                input_path, output_path = self.validate_hash_arguments(args)
-                self.execute_hash_operation(args.algorithm, input_path, output_path)
+
+                # Проверяем режим HMAC
+                if args.hmac:
+                    # HMAC режим
+                    key, input_path, output_path, verify_path = self.validate_hmac_arguments(args)
+                    self.execute_hmac_operation(key, input_path, output_path, verify_path)
+                else:
+                    # Обычное хеширование
+                    input_path, output_path = self.validate_hash_arguments(args)
+                    self.execute_hash_operation(args.algorithm, input_path, output_path)
 
             elif args.command is None:
                 # Проверяем что переданы необходимые аргументы для шифрования
@@ -277,3 +390,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

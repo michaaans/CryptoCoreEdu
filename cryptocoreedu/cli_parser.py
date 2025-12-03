@@ -47,5 +47,24 @@ def create_parser():
 
     dgst_parser.add_argument('--output', '-o', type=Path,
                              help='Выходной файл для записи хеша')
+    # hmac
+    dgst_parser.add_argument(
+        '--hmac',
+        action='store_true',
+        help='Включить режим HMAC (требует --key)'
+    )
+
+    dgst_parser.add_argument(
+        '--key', '-k',
+        type=str,
+        help='Секретный ключ в hex формате (обязателен для --hmac)'
+    )
+
+    # verify
+    dgst_parser.add_argument(
+        '--verify', '-v',
+        type=Path,
+        help='Файл с ожидаемым HMAC для верификации'
+    )
 
     return parser

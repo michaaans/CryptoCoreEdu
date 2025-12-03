@@ -137,7 +137,7 @@ crypto -alg aes -m cfb -dec -k 000102030405060708090a0b0c0d0e0f -i tests/documen
 - `--input (-i)`: Входной файл
 - `--output (-o)`: Выходной файл
 
-### Команды хэширования
+### Команды хэширования и HMAC
 
 ```shell
   # Хэширование без указания выходного файла (Windows)
@@ -154,13 +154,30 @@ crypto -alg aes -m cfb -dec -k 000102030405060708090a0b0c0d0e0f -i tests/documen
   # Хэширование с указанием выходного файла
   crypto dgst -alg sha3-256 -i backup.tar -o backup.sha3
 ```
+
+```bash
+   # HMAC без указания выходного файла (Linux/MacOS/WSL)
+  crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/message.txt
+  # HMAC с указанием выходного файла
+  crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/message.txt -o tests/hmac.txt
+  # HMAC с указанием флага для верификации
+  crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/message.txt -v tests/hmac.txt
+  #Вывод: [OK] Проверка HMAC успешна
+```
 ### Параметры хэш-функций и их особенности
-#### Параметры:
+#### Параметры хэширования:
 - `--algorithm (-alg)`: Алгоритм хэширования (`sha256`, `sha3-256`)
 - `--input (-i)`: Входной файл
 - `--output (-o)`: Выходной файл (опционально)
+#### Параметры HMAC:
+- `--algorithm (-alg)`: Алгоритм хэширования (`sha256`, `sha3-256`)
+- `--hmac`: Флаг для вычисления HMAC
+- `--key (-k)`: Ключ для вычисления HMAC (обязателен для флага --hmac; может быть любой длины от 1 байта)
+- `--input (-i)`: Входной файл
+- `--output (-o)`: Выходной файл (опционально)
+- `--verify (-v)`: Флаг для проверки сообщения
 
-**Формат вывода хэша**:
+**Формат вывода хэша и HMAC**:
 #### 5d5b09f6dcb2d53a5fffc60c4ac0d55fb052072fa2fe5d95f011b5d5d5b0b0b5  document.pdf
 
 #### Особенности:
@@ -178,6 +195,14 @@ crypto -alg aes -m cfb -dec -k 000102030405060708090a0b0c0d0e0f -i tests/documen
    - Использует губчатую конструкцию Keccak
    - Размер чанка 8192 байт.
    - Обработка больщих файлов (>1gb)
+
+3. **Алгоритм HMAC-SHA-256**:
+   - Реализован в соответствии со стандартом RFC 2104
+   - Использует HMAC(K, m) = H((K ⊕ opad) ∥ H((K ⊕ ipad) ∥ m))
+   - Обработка больщих файлов (>1gb)
+   - Полностью соответствует RFC 4231
+   - constant-time сравнение для верификации
+   - ключи любой длины
 
 ### Размер ключа и IV
 Ключ должен быть ровно **16 байт** (32 hex-символа):
@@ -371,8 +396,8 @@ diff -s tests/plain.txt tests/decrypted.txt
 ```bash
    # Тестирование sha256 (Linux/MacOS/WSL)
    ## Хэшируем пустой файл
-   crypto dgst -alg sha256 -i tests/empty.txt
-   # Ожидаемый вывод: e3b0c44298fc1c149afbf4c899cfb92427ae41e4649b934ca495991b7852b855 tests/empty.txt
+   crypto dgst -alg sha256 -i tests/empty.txt.txt
+   # Ожидаемый вывод: e3b0c44298fc1c149afbf4c899cfb92427ae41e4649b934ca495991b7852b855 tests/empty.txt.txt
    
    ## Хэшируем файл со строкой "abc"
    crypto dgst -alg sha256 -i tests/test_one.txt
@@ -387,8 +412,8 @@ diff -s tests/plain.txt tests/decrypted.txt
 ```bash
    # Тестирование sha3-256 (Linux/MacOS/WSL)
    ## Хэшируем пустой файл
-   crypto dgst -alg sha3-256 -i tests/empty.txt
-   # Ожидаемый вывод: a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a tests/empty.txt
+   crypto dgst -alg sha3-256 -i tests/empty.txt.txt
+   # Ожидаемый вывод: a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a tests/empty.txt.txt
    
    ## Хэшируем файл со строкой "abc"
    crypto dgst -alg sha3-256 -i tests/test_one.txt
@@ -405,9 +430,9 @@ diff -s tests/plain.txt tests/decrypted.txt
 ```bash
    # Тестирование sha256 (Linux/MacOS/WSL)
    # хэшируем пустой файл нашей реализацией
-   crypto dgst -alg sha256 -i tests/empty.txt -o tests/output_hash.txt
+   crypto dgst -alg sha256 -i tests/empty.txt.txt -o tests/output_hash.txt
    # хэшируем пустой файл с помощью sha256sum
-   sha256sum tests/empty.txt > tests/system_hash.txt
+   sha256sum tests/empty.txt.txt > tests/system_hash.txt
    # проверяем идентичность
    diff -s tests/output_hash.txt tests/system_hash.txt
    #Ожидаемый вывод: Files tests/output_hash.txt and tests/system_hash.txt are identical
@@ -416,9 +441,9 @@ diff -s tests/plain.txt tests/decrypted.txt
 ```bash
    # Тестирование sha3-256 (Linux/MacOS/WSL)
    # хэшируем пустой файл нашей реализацией
-   crypto dgst -alg sha3-256 -i tests/empty.txt -o tests/output_hash.txt
+   crypto dgst -alg sha3-256 -i tests/empty.txt.txt -o tests/output_hash.txt
    # хэшируем пустой файл с помощью sha3sum
-   sha3sum -a 256 tests/empty.txt > tests/system_hash.txt
+   sha3sum -a 256 tests/empty.txt.txt > tests/system_hash.txt
    # проверяем идентичность
    diff -s tests/output_hash.txt tests/system_hash.txt
    #Ожидаемый вывод: Files tests/output_hash.txt and tests/system_hash.txt are identical
@@ -432,6 +457,85 @@ diff -s tests/plain.txt tests/decrypted.txt
    # Примерное время выполнение около 50-55 секунд
 ```
 
+### Тестирование HMAC
+
+#### Тесты с известными векторами RFC-4231
+
+```bash
+  # Ключ - 20 байт
+  echo "Hi There" > tests/message.txt 
+  crypto dgst -alg sha256 --hmac -k 0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b -i tests/message.txt
+  # b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7  tests/message.txt
+  
+  # Ключ - 8 байт
+  echo "what do ya want for nothing?" > tests/message.txt 
+  crypto dgst -alg sha256 --hmac -k 4a656665 -i tests/message.txt
+  # 5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843  tests/message.txt
+  
+  # Ключ - 20 байт
+  echo -n "ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" | xxd -r -p > tests/message.bin
+  crypto dgst -alg sha256 --hmac -k aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -i tests/message.bin
+  # 773ea91e36800e46854db8ebd09181a72959098b3ef8c122d9635514ced565fe  tests/message.bin
+  
+  # Ключ - 25 байт
+  echo -n "cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd" | xxd -r -p > tests/message.bin
+  crypto dgst -alg sha256 --hmac -k 0102030405060708090a0b0c0d0e0f10111213141516171819 -i tests/message.bin
+  # 82558a389a443c0ea4cc819899f2083a85f0faa3e578f8077a2e3ff46729665b  tests/message.bin
+  
+  # Ключ - 20 байт
+  echo -n "Test With Truncation" > tests/message.txt
+  crypto dgst -alg sha256 --hmac -k 0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c0c -i tests/message.txt
+  # a3b6167473100ee06e0c796c2955552b  tests/message.txt
+  
+  # Ключ - 131 байт
+  echo -n "Test Using Larger Than Block-Size Key - Hash Key First" > tests/message.txt
+  crypto dgst -alg sha256 --hmac -k aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -i tests/message.txt
+  # 60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54  tests/message.txt
+  
+  # Ключ - 131 байт
+  echo -n "This is a test using a larger than block-size key and a larger than block-size data. The key needs to be hashed before being used by the HMAC algorithm." > tests/message.txt
+  crypto dgst -alg sha256 --hmac -k aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -i tests/message.txt
+  # 9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2  tests/message.txt
+```
+#### Тест верификации 
+
+```bash
+   crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/message.txt -o tests/hmac.txt
+    
+   crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/message.txt -v tests/hmac.txt
+   #Вывод [OK] Проверка HMAC успешна
+```
+
+#### Тест на обнаружение искажения
+```bash
+   # Изменение файла
+   echo "original_content" > tests/message.txt
+   crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/message.txt -o tests/original_hmac.txt
+   echo "modified_content" > tests/message.txt
+   crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/message.txt -v tests/original_hmac.txt
+   #Вывод [ERROR] Проверка HMAC неверна
+```
+```bash
+   # Изменение ключа
+   echo "original_content" > tests/message.txt
+   crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/message.txt -o tests/original_hmac.txt
+   # используем уже другой ключ
+   crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddee -i tests/message.txt -v tests/original_hmac.txt
+   #Вывод [ERROR] Проверка HMAC неверна
+```
+
+#### Тест пустого и большого файла
+```bash
+   # Пустой файл
+   crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/empty.txt
+   # e8a06537f096ccf1a3c425a56cea054072c4a8db67bd28cfb02fbeaf84b35f6c tests/empty.txt
+   
+   # Большой файл 1 Гб
+   crypto dgst -alg sha256 --hmac -k 00112233445566778899aabbccddeeff -i tests/test1gb.txt
+   # 4b76d58337bb038d37c24e0ba7c47fb6b314bb1a5ad979b4ebb697a6d3571cdd  tests/test1gb.txt
+```
+
+
 ## Структура проекта
 
 ```
@@ -440,10 +544,12 @@ CryptoCoreEdu/
 │   ├── main.py            # Точка входа
 │   └── hash/
 │       ├──sha3-256.py     # Хэш-функция sha3-256
-│       ├──sha256.py       # Хэш-функция sha256
+│       └──sha256.py       # Хэш-функция sha256
+│   └── mac/
+│       └──hmac.py     # HMAC функция
 │   └── utils/
 │       ├── padding.py     # Реализация паддинга по стандрату PKCS7
-│       ├── validators.py  # Валидаторы для ключей, IV и файлов
+│       └── validators.py  # Валидаторы для ключей, IV и файлов
 │   └── modes/             # Реализации режимов шифрования
 │       ├── ECBMode.py        # Режим ECB
 │       ├── CBCMode.py        # Режим CBC
@@ -454,11 +560,12 @@ CryptoCoreEdu/
 │   ├── csprng.py         # КСГПСЧ
 │   ├── file_io.py        # Работа с файлами и IV
 │   ├── exceptions.py     # Кастомные исключения для ошибок
-│   ├── main.py           # Точка входа в приложение
+│   └── main.py           # Точка входа в приложение
 ├── sts-2.1.2/            # Папка с тестами NIST (STS)
 ├── tests/                # Тесты
-│   └── plain.txt         # Файл plaintext'а
-│   └── test.txt          # Файл для хэша
+│   ├── plain.txt         # Файл plaintext'а
+│   ├── test.txt          # Файл для хэша
+│   ├── message.txt       # Файл для HMAC
 │   └── test_csprng.py    # Файл для теста уникальности ключа и IV
 ├── extract_iv.py         # Функция выжимки IV из файлов (для удобства)
 ├── setup.py              # Файл сборки проекта
@@ -515,6 +622,14 @@ diff -s tests/plain.txt tests/decrypted.txt
 * 114: Ошибка операции хэширования
 
 * 115: Ошибка аргументов
+
+* 116: Ошибка отсутствия ключа как обязательного параметра
+
+* 117: Ошибка ключа
+
+* 118: Не удачная верификация HMAC
+
+* 119: Ошибка верификации HMAC
 
 ## Важные заметки
 
