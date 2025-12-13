@@ -5,7 +5,8 @@ from pathlib import Path
 def create_parser():
     parser = argparse.ArgumentParser(
         description='CryptoCore - Cryptographic Tool',
-        prog='crypto'
+        prog='crypto',
+        allow_abbrev=False
     )
 
     subparsers = parser.add_subparsers(
@@ -19,7 +20,7 @@ def create_parser():
     # Основная команда crypto для шифрования/дешифрования (все аргументы необязательные)
     parser.add_argument('--algorithm', '-alg', choices=['aes'],
                         help='Алгоритм шифрования')
-    parser.add_argument('--mode', '-m', choices=['ecb', 'cbc', 'cfb', 'ofb', 'ctr'],
+    parser.add_argument('--mode', '-m', choices=['ecb', 'cbc', 'cfb', 'ofb', 'ctr', 'gcm', 'etm'],
                         help='Режим работы')
 
     mode_group = parser.add_mutually_exclusive_group(required=False)
@@ -29,7 +30,21 @@ def create_parser():
                             help='Режим дешифрования')
 
     parser.add_argument('--key', '-k', help='Ключ шифрования (128-бит)')
-    parser.add_argument('--iv', help='Вектор инициализации')
+
+    # CLI-4: --iv используется для nonce в GCM (сохраняем для обратной совместимости)
+    parser.add_argument(
+        '--iv',
+        help='Вектор инициализации / Nonce в hex формате (12 байт для GCM, 16 байт для других)'
+    )
+
+    # Дополнительный алиас --nonce для GCM (CLI-4)
+    parser.add_argument(
+        '--nonce',
+        help='Nonce для режима GCM (алиас для --iv, 12 байт в hex)'
+    )
+
+    parser.add_argument('--aad', type=str, default='',
+                        help='Ассоциированные аутентификационные данные в hex формате (для режима GCM)')
 
     parser.add_argument('--input', '-i', type=Path, help='Входной файл')
     parser.add_argument('--output', '-o', type=Path, help='Выходной файл')

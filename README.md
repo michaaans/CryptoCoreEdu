@@ -1,6 +1,6 @@
 # CryptoCoreEdu
 
-**CryptoCoreEdu** — утилита командной строки для блочного шифрования файлов с использованием AES-128 в различных режимах работы. Проект разработан в образовательных целях для демонстрации принципов работы блочных шифров.
+**CryptoCoreEdu** — утилита командной строки для блочного шифрования файлов с использованием AES-128 в различных режимах работы, включая аутентифицированное шифрование. Проект разработан в образовательных целях для демонстрации принципов работы блочных шифров и криптографической аутентификации.
 
 ## Установка
 
@@ -58,6 +58,10 @@ crypto --help
 * OFB (Output Feedback) - потоковый режим, без паддинга
 
 * CTR (Counter) - потоковый режим, без паддинга
+
+* GCM (Galois/Counter Mode) - аутентифицированное шифрование по стандарту NIST SP 800-38D
+
+* ETM (Encrypt-then-MAC) - составной режим CTR + HMAC-SHA256
 
 ### Базовые команды шифрования
 
@@ -134,8 +138,179 @@ crypto -alg aes -m cfb -dec -k 000102030405060708090a0b0c0d0e0f -i tests/documen
 - `--decrypt (-dec)`: Режим дешифрования
 - `--key (-k)`: Ключ шифрования (16 байт в hex-формате, необязателен при шифровании)
 - `--iv`: Вектор инициализации (16 байт в hex-формате; только в режиме дешифрования)
+- `--nonce (-n)`: Nonce для GCM (12 байт в hex; алиас для --iv)
+- `--aad`: Associated Authenticated Data в hex (для GCM/ETM)
 - `--input (-i)`: Входной файл
 - `--output (-o)`: Выходной файл
+
+### Свойства безопасности AEAD
+| Свойство | Описание |
+|----------|-----------|
+| Защита от подмены      | Изменение любого бита ciphertext или tag приводит к ошибке аутентификации       |
+| Защита AAD      | Изменение AAD также приводит к ошибке, хотя AAD не шифруется        |
+| Катастрофический отказ      | При ошибке аутентификации НЕ выводятся никакие данные        |
+| Уникальность nonce      | Каждое шифрование использует уникальный случайный nonce        |
+
+
+### GCM Mode (Galois/Counter Mode)
+#### Описание
+GCM — стандартизированный режим аутентифицированного шифрования (NIST SP 800-38D), широко используемый в TLS, IPsec, SSH.
+
+Характеристики:
+* Nonce: 12 байт (96 бит)
+* Tag: 16 байт (128 бит)
+* Использует умножение в поле Галуа GF(2¹²⁸)
+* Формат вывода: Nonce (12) || Ciphertext || Tag (16)
+
+```bash
+   # Шифрование с AAD
+   crypto -alg aes -m gcm -enc \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 48656c6c6f576f726c64 \
+       -i tests/plain.txt \
+       -o tests/cipher.bin
+   
+   # Шифрование без AAD
+   crypto -alg aes -m gcm -enc \
+       -k 00112233445566778899aabbccddeeff \
+       -i tests/plain.txt \
+       -o tests/cipher.bin
+   
+   # Расшифрование (nonce читается из файла автоматически)
+   crypto -alg aes -m gcm -dec \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 48656c6c6f576f726c64 \
+       -i tests/cipher.bin \
+       -o tests/decrypted.txt
+   
+   # Расшифрование с внешним nonce (через --nonce или --iv)
+   crypto -alg aes -m gcm -dec \
+       -k 00112233445566778899aabbccddeeff \
+       --nonce 000102030405060708090a0b \
+       --aad 48656c6c6f576f726c64 \
+       -i tests/ciphertext_without_nonce.bin \
+       -o tests/decrypted.txt
+
+```
+
+```bash
+   # 1. Создаём тестовый файл
+   echo -n "Secret message for GCM test" > tests/gcm_plain.txt
+   
+   # 2. Шифруем с AAD
+   crypto -alg aes -m gcm -enc \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 4d657461646174613132333435 \
+       -i tests/gcm_plain.txt \
+       -o tests/gcm_cipher.bin
+   # Вывод: [INFO] Файл успешно зашифрован (GCM authenticated) в режиме GCM
+   
+   # 3. Расшифровываем с тем же AAD
+   crypto -alg aes -m gcm -dec \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 4d657461646174613132333435 \
+       -i tests/gcm_cipher.bin \
+       -o tests/gcm_decrypted.txt
+   # Вывод: [INFO] Файл успешно расшифрован (GCM аутентификация успешна) в режиме GCM
+   
+   # 4. Проверяем
+   diff -s tests/gcm_plain.txt tests/gcm_decrypted.txt
+   # Вывод: Files tests/gcm_plain.txt and tests/gcm_decrypted.txt are identical
+```
+
+```bash
+   # Расшифровываем с НЕВЕРНЫМ AAD
+   crypto -a aes -m gcm -d \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 576f726e6741414421 \
+       -i tests/gcm_cipher.bin \
+       -o tests/should_not_exist.txt
+   
+   # Вывод:
+   # [ERROR] Ошибка аутентификации
+   # [DETAILS] Authentication failed: AAD mismatch or ciphertext tampered
+   #          Возможные причины:
+   #          - Неверный AAD
+   #          - Повреждённые данные
+   #          - Неверный ключ
+   
+   # Файл НЕ создан
+   ls tests/should_not_exist.txt
+   # ls: cannot access 'tests/should_not_exist.txt': No such file or directory
+```
+
+### ETM Mode (Encrypt-then-MAC)
+#### Описание
+ETM — составной режим аутентифицированного шифрования, комбинирующий CTR mode для шифрования и HMAC-SHA256 для аутентификации.
+
+Характеристики:
+* IV: 16 байт (128 бит)
+* Tag: 32 байта (256 бит, HMAC-SHA256)
+* Использует раздельные ключи для шифрования и MAC (key separation)
+* Формат вывода: IV (16) || Ciphertext || HMAC Tag (32)
+
+Конструкция:
+
+HMAC(K_m, Ciphertext || AAD) = Tag,
+где K_e, K_m = DeriveKeys(MasterKey)
+
+```bash
+   # Шифрование с AAD
+   crypto -alg aes -m etm -enc \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 616263 \
+       -i tests/plain.txt \
+       -o tests/cipher.bin
+   
+   # Шифрование без AAD
+   crypto -a aes -m etm -enc \
+       -k 00112233445566778899aabbccddeeff \
+       -i tests/plain.txt \
+       -o tests/cipher.bin
+   
+   # Расшифрование
+   crypto -alg aes -m etm -dec \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 616263 \
+       -i tests/cipher.bin \
+       -o tests/decrypted.txt
+```
+
+```bash
+   # 1. Создаём тестовый файл
+   echo -n "Secret message for ETM test" > tests/etm_plain.txt
+   
+   # 2. Шифруем
+   crypto -alg aes -m etm -enc \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 746573745f616164 \
+       -i tests/etm_plain.txt \
+       -o tests/etm_cipher.bin
+   # Вывод: [INFO] Файл успешно зашифрован (ETM (CTR+HMAC) authenticated) в режиме ETM
+   
+   # 3. Расшифровываем
+   crypto -alg aes -m etm -dec \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 746573745f616164 \
+       -i tests/etm_cipher.bin \
+       -o tests/etm_decrypted.txt
+   # Вывод: [INFO] Файл успешно расшифрован (ETM (CTR+HMAC) аутентификация успешна) в режиме ETM
+   
+   # 4. Проверяем
+   diff -s tests/etm_plain.txt tests/etm_decrypted.txt
+   # Вывод: Files tests/etm_plain.txt and tests/etm_decrypted.txt are identical****
+```
+
+### AAD (Associated Authenticated Data)
+#### Что такое AAD?
+
+AAD — это дополнительные данные, которые:
+* НЕ шифруются (остаются в открытом виде)
+* Аутентифицируются (защищены от подмены)
+* Используются для метаданных: заголовков, ID, timestamp и т.д.
+
+#### Формат AAD
+AAD передаётся как hex-строка, например, 48656c6c6f
 
 ### Команды хэширования и HMAC
 
@@ -204,16 +379,25 @@ crypto -alg aes -m cfb -dec -k 000102030405060708090a0b0c0d0e0f -i tests/documen
    - constant-time сравнение для верификации
    - ключи любой длины
 
-### Размер ключа и IV
-Ключ должен быть ровно **16 байт** (32 hex-символа):
+### Размер ключа, IV и Nonce
+
+| Параметр           | Размер            | Режимы                       |
+|--------------------|-------------------|------------------------------|
+| Ключ               | 16 байт (32 hex)  | Все режимы                   |
+| IV                 | 16 байт (32 hex)  | ECB, CBC, CFB, OFB, CTR, ETM |
+| Nonce              | 12 байт (24 hex)  | GCM                          |
+
+
 ```
-Правильно: 000102030405060708090a0b0c0d0e0f
+Правильный ключ: 000102030405060708090a0b0c0d0e0f (32 символа)
 Неправильно: mykey123 (8 байт)
 ```
-IV должен быть ровно **16 байт** (32 hex-символа):
 ```
-Правильно: AABBCCDDEEFF00112233445566778899
+Правильный IV: AABBCCDDEEFF00112233445566778899 (32 символа)
 Неправильно: ASFSAFSA909DAS9DA99129129DNNBN
+```
+```
+Правильный Nonce: 000102030405060708090a0b (24 символа)
 ```
 
 ### Автоматическая генерация ключей
@@ -535,6 +719,255 @@ diff -s tests/plain.txt tests/decrypted.txt
    # 4b76d58337bb038d37c24e0ba7c47fb6b314bb1a5ad979b4ebb697a6d3571cdd  tests/test1gb.txt
 ```
 
+### Тестирование GCM
+
+#### TEST-1: NIST Test Vectors
+```bash
+   # NIST Test Case 1: Empty plaintext, empty AAD
+   echo -n "" > tests/aead/nist_test1.txt
+   
+   crypto -alg aes -m gcm -enc \
+       -k 00000000000000000000000000000000 \
+       --aad "" \
+       -i tests/aead/nist_test1.txt \
+       -o tests/aead/nist_test1_cipher.bin
+   
+   # Размер должен быть 28 байт: 12 (nonce) + 0 (ciphertext) + 16 (tag)
+   wc -c < tests/aead/nist_test1_cipher.bin
+   # Ожидаемый вывод: 28
+   
+   # Расшифровываем и проверяем
+   crypto -alg aes -m gcm -dec \
+       -k 00000000000000000000000000000000 \
+       --aad "" \
+       -i tests/aead/nist_test1_cipher.bin \
+       -o tests/aead/nist_test1_decrypted.txt
+   
+   diff -s tests/aead/nist_test1.txt tests/aead/nist_test1_decrypted.txt
+   # Ожидаемый вывод: Files ... are identical
+```
+#### TEST-2: Round-trip Test
+```bash
+   # Создаём тестовый файл
+   echo -n "The quick brown fox jumps over the lazy dog" > tests/aead/roundtrip.txt
+   
+   # Шифруем
+   crypto -alg aes -m gcm -enc \
+       -k 0123456789abcdef0123456789abcdef \
+       --aad 48656c6c6f576f726c64 \
+       -i tests/aead/roundtrip.txt \
+       -o tests/aead/roundtrip_cipher.bin
+   
+   # Расшифровываем
+   crypto -alg aes -m gcm -dec \
+       -k 0123456789abcdef0123456789abcdef \
+       --aad 48656c6c6f576f726c64 \
+       -i tests/aead/roundtrip_cipher.bin \
+       -o tests/aead/roundtrip_decrypted.txt
+   
+   # Проверяем
+   diff -s tests/aead/roundtrip.txt tests/aead/roundtrip_decrypted.txt
+   # Ожидаемый вывод: Files ... are identical
+```
+#### TEST-3: AAD Tampering Detection
+```bash
+   # Шифруем с правильным AAD
+   echo -n "Secret message" > tests/aead/aad_test.txt
+   
+   crypto -alg aes -m gcm -enc \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 636f72726563745f616164 \
+       -i tests/aead/aad_test.txt \
+       -o tests/aead/aad_test_cipher.bin
+   
+   # Пытаемся расшифровать с НЕВЕРНЫМ AAD
+   crypto -alg aes -m gcm -dec \
+       -k 00112233445566778899aabbccddeeff \
+       --aad 77726f6e675f616164 \
+       -i tests/aead/aad_test_cipher.bin \
+       -o tests/aead/aad_test_fail.txt
+   
+   # Ожидаемый вывод:
+   # [ERROR] Ошибка аутентификации
+   
+   # Проверяем что файл НЕ создан
+   ls tests/aead/aad_test_fail.txt 2>&1
+   # Ожидаемый вывод: No such file or directory
+```
+#### TEST-4: Ciphertext Tampering Detection
+```bash
+   # Шифруем
+   echo -n "Message to tamper" > tests/aead/tamper_test.txt
+   
+   crypto -alg aes -m gcm -enc \
+       -k ffeeddccbbaa99887766554433221100 \
+       --aad aabbccdd \
+       -i tests/aead/tamper_test.txt \
+       -o tests/aead/tamper_cipher.bin
+   
+   # Копируем и модифицируем
+   cp tests/aead/tamper_cipher.bin tests/aead/tamper_modified.bin
+   
+   python3 -c "data = bytearray(open('tests/aead/tamper_modified.bin', 'rb').read()); data[20] ^= 0x01; open('tests/aead/tamper_modified.bin', 'wb').write(data)"
+   
+   # Пытаемся расшифровать
+   crypto -alg aes -m gcm -dec \
+       -k ffeeddccbbaa99887766554433221100 \
+       --aad aabbccdd \
+       -i tests/aead/tamper_modified.bin \
+       -o tests/aead/tamper_fail.txt
+   
+   # Ожидаемый вывод: [ERROR] Ошибка аутентификации
+   
+   # Файл НЕ создан
+   ls tests/aead/tamper_fail.txt 2>&1
+   # Ожидаемый вывод: No such file or directory
+```
+#### TEST-5: Nonce Uniqueness
+
+```bash
+python3 -c "
+import sys
+sys.path.insert(0, '.')
+from cryptocoreedu.modes.GCMMode import GCMMode
+nonces = set()
+key = bytes.fromhex('00112233445566778899aabbccddeeff')
+for i in range(1000):
+    gcm = GCMMode(key)
+    nonces.add(gcm.nonce)
+print(f'Unique nonces: {len(nonces)} out of 1000')
+print('PASSED' if len(nonces) == 1000 else 'FAILED')
+"
+   # Ожидаемый вывод: 
+   # Unique nonces: 1000 out of 1000
+   # PASSED
+```
+#### TEST-6: Empty AAD
+```bash
+   echo -n "Message with empty AAD" > tests/aead/empty_aad.txt
+   
+   # Шифруем с пустым AAD
+   crypto -alg aes -m gcm -enc \
+       -k 11111111111111111111111111111111 \
+       --aad "" \
+       -i tests/aead/empty_aad.txt \
+       -o tests/aead/empty_aad_cipher.bin
+   
+   # Расшифровываем с пустым AAD
+   crypto -alg aes -m gcm -dec \
+       -k 11111111111111111111111111111111 \
+       --aad "" \
+       -i tests/aead/empty_aad_cipher.bin \
+       -o tests/aead/empty_aad_decrypted.txt
+   
+   diff -s tests/aead/empty_aad.txt tests/aead/empty_aad_decrypted.txt
+   # Ожидаемый вывод: Files ... are identical
+   
+   # Без флага --aad вообще
+   crypto -alg aes -m gcm -enc \
+       -k 22222222222222222222222222222222 \
+       -i tests/aead/empty_aad.txt \
+       -o tests/aead/no_aad_cipher.bin
+   
+   crypto -alg aes -m gcm -dec \
+       -k 22222222222222222222222222222222 \
+       -i tests/aead/no_aad_cipher.bin \
+       -o tests/aead/no_aad_decrypted.txt
+   
+   diff -s tests/aead/empty_aad.txt tests/aead/no_aad_decrypted.txt
+   # Ожидаемый вывод: Files ... are identical
+```
+#### TEST-7: Large AAD
+```bash
+# Генерируем большой AAD (10KB в hex)
+LARGE_AAD=$(python3 -c "import os; print(os.urandom(10240).hex())")
+
+echo -n "Message with large AAD" > tests/aead/large_aad.txt
+
+# Шифруем
+crypto -alg aes -m gcm -enc \
+    -k 33333333333333333333333333333333 \
+    --aad "$LARGE_AAD" \
+    -i tests/aead/large_aad.txt \
+    -o tests/aead/large_aad_cipher.bin
+
+# Расшифровываем
+crypto -alg aes -m gcm -dec \
+    -k 33333333333333333333333333333333 \
+    --aad "$LARGE_AAD" \
+    -i tests/aead/large_aad_cipher.bin \
+    -o tests/aead/large_aad_decrypted.txt
+
+diff -s tests/aead/large_aad.txt tests/aead/large_aad_decrypted.txt
+# Ожидаемый вывод: Files ... are identical
+```
+
+### Тестирование ETM
+
+#### TEST-9.1: ETM Round-trip
+```bash
+echo -n "ETM test message" > tests/aead/etm_plain.txt
+
+crypto -alg aes -m etm -enc \
+    -k 00112233445566778899aabbccddeeff \
+    --aad 616263 \
+    -i tests/aead/etm_plain.txt \
+    -o tests/aead/etm_cipher.bin
+
+crypto -alg aes -m etm -dec \
+    -k 00112233445566778899aabbccddeeff \
+    --aad 616263 \
+    -i tests/aead/etm_cipher.bin \
+    -o tests/aead/etm_decrypted.txt
+
+diff -s tests/aead/etm_plain.txt tests/aead/etm_decrypted.txt
+# Ожидаемый вывод: Files ... are identical
+```
+#### TEST-9.2: ETM AAD Tampering
+```bash
+crypto -alg aes -m etm -dec \
+    -k 00112233445566778899aabbccddeeff \
+    --aad 646566 \
+    -i tests/aead/etm_cipher.bin \
+    -o tests/aead/etm_aad_fail.txt
+
+# Ожидаемый вывод: [ERROR] Ошибка аутентификации
+
+ls tests/aead/etm_aad_fail.txt 2>&1
+# Ожидаемый вывод: No such file or directory
+```
+#### TEST-9.3: ETM Ciphertext Tampering
+```bash
+cp tests/aead/etm_cipher.bin tests/aead/etm_tampered.bin
+
+python3 -c "
+data = bytearray(open('tests/aead/etm_tampered.bin', 'rb').read())
+data[20] ^= 0x01
+open('tests/aead/etm_tampered.bin', 'wb').write(data)
+"
+
+crypto -alg aes -m etm -dec \
+    -k 00112233445566778899aabbccddeeff \
+    --aad 616263 \
+    -i tests/aead/etm_tampered.bin \
+    -o tests/aead/etm_tamper_fail.txt
+
+# Ожидаемый вывод: [ERROR] Ошибка аутентификации
+ls tests/aead/etm_tamper_fail.txt 2>&1
+# Ожидаемый вывод: No such file or directory
+```
+#### TEST-9.4: ETM Wrong Key
+```bash
+crypto -alg aes -m etm -dec \
+    -k ffffffffffffffffffffffffffffffff \
+    --aad 616263 \
+    -i tests/aead/etm_cipher.bin \
+    -o tests/aead/etm_wrong_key.txt
+
+# Ожидаемый вывод: [ERROR] Ошибка аутентификации
+ls tests/aead/etm_wrong_key.txt 2>&1
+# Ожидаемый вывод: No such file or directory
+```
 
 ## Структура проекта
 
@@ -631,11 +1064,18 @@ diff -s tests/plain.txt tests/decrypted.txt
 
 * 119: Ошибка верификации HMAC
 
+* 120: Ошибка валидации AAD
+
+* 121: Ошибка аутентификации AEAD
+
+* 122: Ошибка валидации nonce
+
 ## Важные заметки
 
 - Проект разработан для **образовательных целей**
 - Режим ECB не рекомендуется для защиты реальных данных
-- Всегда используйте надежные случайные ключи
+- Никогда не используйте один nonce дважды с одним ключом в GCM!
+- При ошибке аутентификации AEAD выходной файл не создаётся
 - Сохраняйте ключи в безопасном месте
 - Для генерации криктостойких ключей и IV используется системный источник энтропии (os.urandom()); гарантирует уникальность и непредсказуемость генерируемых значений
 - Скорость хэш-функций может быть гораздо ниже, чем в проверенных реализациях (hashlib, sha256sum и т.д.)

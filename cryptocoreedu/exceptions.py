@@ -36,3 +36,8 @@ class UnsupportedAlgorithmError(CryptoError):
 class HashOperationError(CryptoError):
     """Ошибка выполнения операции хеширования"""
     pass
+
+
+class AuthenticationError(Exception):
+    """Ошибка неверной аутентификации"""
+    pass
