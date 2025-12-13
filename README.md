@@ -988,6 +988,8 @@ CryptoCoreEdu/
 │       ├── CBCMode.py        # Режим CBC
 │       ├── CFBMode.py        # Режим CFB
 │       ├── OFBMode.py        # Режим OFB
+│       ├── GCMMode.py        # Режим GCM
+│       ├── ETMMode.py        # Режим ETM
 │       └── CTRMode.py        # Режим CTR
 │   ├── cli_parser.py     # Парсинг аргументов
 │   ├── csprng.py         # КСГПСЧ
@@ -996,6 +998,7 @@ CryptoCoreEdu/
 │   └── main.py           # Точка входа в приложение
 ├── sts-2.1.2/            # Папка с тестами NIST (STS)
 ├── tests/                # Тесты
+│   ├── aead/             # Папка с файлами .txt/.bin
 │   ├── plain.txt         # Файл plaintext'а
 │   ├── test.txt          # Файл для хэша
 │   ├── message.txt       # Файл для HMAC
