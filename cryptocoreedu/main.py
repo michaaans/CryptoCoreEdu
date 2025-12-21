@@ -26,6 +26,9 @@ from .hash.sha3_256 import sha3_256_file
 
 from .mac.hmac import HMAC, hmac_file, verify_hmac, parse_hmac_file
 
+from .kdf.pbkdf2 import pbkdf2_hmac_sha256
+from .kdf.hkdf import derive_key
+
 
 class CryptoApp:
     """
@@ -56,18 +59,131 @@ class CryptoApp:
         'aad_validation': 120,
         'authentication_failed': 121,
         'nonce_validation': 122,
+        'kdf_error': 123,
+        'salt_validation': 124,
+        'password_required': 125,
+        'iterations_invalid': 126,
+        'length_invalid': 127,
     }
 
-    # AEAD режимы (authenticated encryption)
     AEAD_MODES = {'gcm', 'etm'}
 
     def __init__(self):
         self.parser = create_parser()
 
+    def validate_derive_arguments(self, args):
+
+        # Валидация пароля
+        if not args.password:
+            print_error("Пароль обязателен", "Укажите --password")
+            sys.exit(self.ERROR_CODES['password_required'])
+
+        password = args.password
+
+        # Валидация и обработка соли
+        if args.salt:
+            salt_hex = args.salt.strip()
+
+            # Проверка hex формата
+            if len(salt_hex) % 2 != 0:
+                print_error(
+                    "Некорректная длина соли",
+                    f"Hex строка должна иметь чётное количество символов. Получено: {len(salt_hex)}"
+                )
+                sys.exit(self.ERROR_CODES['salt_validation'])
+
+            valid_hex_chars = set('0123456789abcdefABCDEF')
+            invalid_chars = set(salt_hex) - valid_hex_chars
+            if invalid_chars:
+                print_error(
+                    "Некорректные символы в соли",
+                    f"Допустимы только hex символы. Найдены: {invalid_chars}"
+                )
+                sys.exit(self.ERROR_CODES['salt_validation'])
+
+            try:
+                salt_bytes = bytes.fromhex(salt_hex)
+            except ValueError as e:
+                print_error("Ошибка преобразования соли", str(e))
+                sys.exit(self.ERROR_CODES['salt_validation'])
+        else:
+            # Генерация случайной соли (16 байт)
+            salt_bytes = generate_random_bytes(16)
+            print_info(f"Сгенерирована случайная соль: {salt_bytes.hex()}")
+
+        # Валидация количества итераций
+        iterations = args.iterations
+        if iterations < 1:
+            print_error(
+                "Некорректное количество итераций",
+                "Количество итераций должно быть не менее 1"
+            )
+            sys.exit(self.ERROR_CODES['iterations_invalid'])
+
+        if iterations < 10000:
+            print_warning(
+                f"Низкое количество итераций ({iterations}). "
+                "Рекомендуется минимум 100000 для паролей."
+            )
+
+        # Валидация длины ключа
+        length = args.length
+        if length < 1:
+            print_error(
+                "Некорректная длина ключа",
+                "Длина ключа должна быть не менее 1 байта"
+            )
+            sys.exit(self.ERROR_CODES['length_invalid'])
+
+        if length > 1024:
+            print_warning(f"Запрошена большая длина ключа: {length} байт")
+
+        # Валидация выходного файла (если указан)
+        output_path = None
+        if args.output:
+            try:
+                output_path = validate_file_path(args.output, for_reading=False)
+            except FileValidationError as e:
+                print_error("Проблема с выходным файлом", str(e))
+                sys.exit(self.ERROR_CODES['output_file'])
+
+        return password, salt_bytes, iterations, length, output_path
+
+    def execute_derive_operation(self, password: str, salt: bytes,
+                                 iterations: int, length: int,
+                                 algorithm: str, output_path: Path = None):
+
+        try:
+            if algorithm == 'pbkdf2':
+                # Вычисление ключа с помощью PBKDF2-HMAC-SHA256
+                derived_key = pbkdf2_hmac_sha256(
+                    password=password,
+                    salt=salt,
+                    iterations=iterations,
+                    dklen=length
+                )
+            else:
+                print_error("Неподдерживаемый алгоритм", f"Алгоритм {algorithm} не реализован")
+                sys.exit(self.ERROR_CODES['kdf_error'])
+
+            key_hex = derived_key.hex()
+            salt_hex = salt.hex()
+
+            if output_path:
+                with open(output_path, 'wb') as f:
+                    f.write(derived_key)
+                print_info(f"Ключ ({length} байт) записан в файл: {output_path}")
+                print(f"{key_hex}  {salt_hex}")
+            else:
+                print(f"{key_hex}  {salt_hex}")
+
+            del password
+
+        except Exception as e:
+            print_error("Ошибка при получении ключа", str(e))
+            sys.exit(self.ERROR_CODES['kdf_error'])
+
     def validate_aad(self, aad_hex: str) -> bytes:
-        """
-        Валидация и преобразование AAD из hex строки.
-        """
         if not aad_hex:
             return b''
 
@@ -99,13 +215,11 @@ class CryptoApp:
             sys.exit(self.ERROR_CODES['aad_validation'])
 
     def validate_nonce(self, nonce_hex: str, mode: str) -> bytes:
-
         if not nonce_hex:
             return None
 
         nonce_hex = nonce_hex.strip()
 
-        # Проверка hex формата
         if len(nonce_hex) % 2 != 0:
             print_error(
                 "Некорректная длина nonce/IV",
@@ -128,73 +242,62 @@ class CryptoApp:
             print_error("Ошибка преобразования nonce/IV", str(e))
             sys.exit(self.ERROR_CODES['nonce_validation'])
 
-        # Проверка длины в зависимости от режима
         if mode == 'gcm':
             if len(nonce_bytes) != 12:
                 print_error(
                     "Некорректная длина nonce для GCM",
-                    f"Nonce должен быть 12 байт (24 hex символа). Получено: {len(nonce_bytes)} байт"
+                    f"Nonce должен быть 12 байт. Получено: {len(nonce_bytes)} байт"
                 )
                 sys.exit(self.ERROR_CODES['nonce_validation'])
         elif mode == 'etm':
             if len(nonce_bytes) != 16:
                 print_error(
                     "Некорректная длина IV для ETM",
-                    f"IV должен быть 16 байт (32 hex символа). Получено: {len(nonce_bytes)} байт"
+                    f"IV должен быть 16 байт. Получено: {len(nonce_bytes)} байт"
                 )
                 sys.exit(self.ERROR_CODES['nonce_validation'])
         else:
-            # Для других режимов - 16 байт
             if len(nonce_bytes) != 16:
                 print_error(
                     "Некорректная длина IV",
-                    f"IV должен быть 16 байт (32 hex символа). Получено: {len(nonce_bytes)} байт"
+                    f"IV должен быть 16 байт. Получено: {len(nonce_bytes)} байт"
                 )
                 sys.exit(self.ERROR_CODES['iv_validation'])
 
         return nonce_bytes
 
     def validate_crypto_arguments(self, args):
-        """
-        Валидация аргументов для криптографических операций.
-        """
         key = self.validate_key_argument(args)
 
-        # Получаем nonce/iv (--nonce имеет приоритет над --iv для GCM)
         nonce_hex = None
         if args.mode == 'gcm' and hasattr(args, 'nonce') and args.nonce:
             nonce_hex = args.nonce
         elif hasattr(args, 'iv') and args.iv:
             nonce_hex = args.iv
 
-        # Специальная обработка для AEAD режимов
         if args.mode in self.AEAD_MODES:
             if args.encrypt and nonce_hex:
                 print_warning(
-                    f"Переданный nonce/IV игнорируется при шифровании в режиме {args.mode.upper()}. "
-                    "Используется случайно сгенерированный nonce"
+                    f"Переданный nonce/IV игнорируется при шифровании в режиме {args.mode.upper()}."
                 )
                 nonce_hex = None
 
             if args.decrypt and nonce_hex:
                 print_info(f"Используется nonce/IV из командной строки для режима {args.mode.upper()}")
         else:
-            # Обычная обработка для других режимов
             if args.encrypt and nonce_hex:
                 if args.mode == 'ecb':
                     print_warning("IV игнорируется для режима ECB")
                 else:
-                    print_warning("Переданный IV игнорируется при шифровании. Используется случайно сгенерированный IV")
+                    print_warning("Переданный IV игнорируется при шифровании.")
                 nonce_hex = None
 
             if args.decrypt and not nonce_hex:
                 if args.mode != 'ecb':
                     print_warning(f"Для режима {args.mode.upper()} IV будет извлечен из файла")
 
-        # Валидация nonce/IV
         iv = self.validate_nonce(nonce_hex, args.mode) if nonce_hex else None
 
-        # Валидация путей к файлам
         try:
             input_path = validate_file_path(args.input, for_reading=True)
         except FileValidationError as e:
@@ -211,7 +314,6 @@ class CryptoApp:
             print_error("Входной и выходной файлы не могут быть одинаковыми")
             sys.exit(self.ERROR_CODES['same_files'])
 
-        # Валидация AAD для AEAD режимов
         aad = b''
         if hasattr(args, 'aad') and args.aad:
             aad = self.validate_aad(args.aad)
@@ -335,7 +437,7 @@ class CryptoApp:
                 elif mode == 'etm':
                     return ETMMode(key)
                 else:
-                    raise ModeNotImplementedError(f"Режим {mode} пока не реализован")
+                    raise ModeNotImplementedError(f"Режим {mode} не реализован")
             else:
                 raise ModeNotImplementedError(f"Алгоритм {algorithm} не поддерживается")
 
@@ -349,40 +451,29 @@ class CryptoApp:
 
     def execute_crypto_operation(self, cipher, operation: str, input_path: Path,
                                  output_path: Path, iv: bytes, mode: str, aad: bytes = b""):
-        """
-        Выполнение криптографической операции.
-        """
         try:
             if operation == 'encrypt':
                 if mode in self.AEAD_MODES:
                     cipher.encrypt_file(input_path, output_path, aad)
                     mode_name = "GCM" if mode == "gcm" else "ETM (CTR+HMAC)"
-                    print_success(f"зашифрован ({mode_name} authenticated)", input_path, output_path, mode)
+                    print_success(f"зашифрован ({mode_name})", input_path, output_path, mode)
                     if aad:
                         print_info(f"AAD: {aad.hex()}")
                 else:
                     cipher.encrypt_file(input_path, output_path)
                     print_success("зашифрован", input_path, output_path, mode)
 
-            else:  # decrypt
+            else:
                 if mode in self.AEAD_MODES:
                     try:
                         cipher.decrypt_file(input_path, output_path, aad, iv)
                         mode_name = "GCM" if mode == "gcm" else "ETM (CTR+HMAC)"
-                        print_success(f"расшифрован ({mode_name} аутентификация успешна)", input_path, output_path,
-                                      mode)
+                        print_success(f"расшифрован ({mode_name})", input_path, output_path, mode)
 
                     except AuthenticationError as e:
                         if output_path.exists():
                             output_path.unlink()
-
-                        print_error(
-                            "Ошибка аутентификации",
-                            str(e) + "\n         Возможные причины:\n"
-                                     "         - Неверный AAD\n"
-                                     "         - Повреждённые данные\n"
-                                     "         - Неверный ключ"
-                        )
+                        print_error("Ошибка аутентификации", str(e))
                         sys.exit(self.ERROR_CODES['authentication_failed'])
                 else:
                     cipher.decrypt_file(input_path, output_path, iv)
@@ -464,6 +555,7 @@ class CryptoApp:
         try:
             args = self.parser.parse_args()
 
+            # Команда dgst
             if args.command == 'dgst':
                 if args.hmac:
                     key, input_path, output_path, verify_path = self.validate_hmac_arguments(args)
@@ -472,6 +564,19 @@ class CryptoApp:
                     input_path, output_path = self.validate_hash_arguments(args)
                     self.execute_hash_operation(args.algorithm, input_path, output_path)
 
+            # Команда derive (CLI-1)
+            elif args.command == 'derive':
+                password, salt, iterations, length, output_path = self.validate_derive_arguments(args)
+                self.execute_derive_operation(
+                    password=password,
+                    salt=salt,
+                    iterations=iterations,
+                    length=length,
+                    algorithm=args.algorithm,
+                    output_path=output_path
+                )
+
+            # Основная команда (шифрование/дешифрование)
             elif args.command is None:
                 if not args.algorithm or not args.mode or not args.input or not args.output:
                     self.parser.error("Для шифрования требуются: --algorithm, --mode, --input, --output")

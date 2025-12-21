@@ -400,6 +400,147 @@ AAD передаётся как hex-строка, например, 48656c6c6f
 Правильный Nonce: 000102030405060708090a0b (24 символа)
 ```
 
+### Команды PBKDF2 и HKDF
+
+#### PBKDF2 (Password-Based Key Derivation Function 2):
+PBKDF2 используется для безопасного выведения криптографических ключей из паролей.
+
+- **Назначение**: Безопасное преобразование паролей в криптографические ключи
+- **Стойкость к brute-force**: Большое количество итераций замедляет атаки
+- **Уникальность ключей**: Использование соли гарантирует разные ключи для одинаковых паролей
+- **Рекомендации по безопасности**:
+    - Минимум 100,000 итераций для современных систем
+    - Использование уникальной соли для каждого ключа
+    - Длина ключа не менее 32 байт (256 бит)
+
+#### Особенности реализации:
+- **Алгоритм**: PBKDF2-HMAC-SHA256
+- **Стандарт**: RFC 2898
+- **Функция псевдослучайности**: HMAC-SHA256
+- **Соль**: 16 байт (генерируется случайно если не указана)
+- **Итерации**: По умолчанию 100,000 (настраивается)
+- **Длина ключа**: Произвольная (по умолчанию 32 байта)
+
+#### Формула PBKDF2:
+```
+DK = PBKDF2(PRF, Password, Salt, c, dkLen)
+где:
+  DK = derived key (выведенный ключ)
+  PRF = HMAC-SHA256
+  Password = пароль
+  Salt = соль
+  c = количество итераций
+  dkLen = длина ключа в байтах
+
+Для каждого блока i (от 1 до l, где l = ceil(dkLen / hLen)):
+  U1 = PRF(Password, Salt || INT_32_BE(i))
+  U2 = PRF(Password, U1)
+  ...
+  Uc = PRF(Password, Uc-1)
+  Ti = U1 ⊕ U2 ⊕ ... ⊕ Uc
+
+DK = T1 || T2 || ... || Tl (обрезается до dkLen байт)
+```
+
+#### HKDF (Hierarchical Key Derivation Function):
+HKDF используется для детерминированного выведения множества ключей из одного мастер-ключа.
+
+- **Назначение**: Создание множества безопасных ключей из одного мастер-ключа
+- **Использование контекста**: Уникальные идентификаторы для разных применений
+- **Примеры контекстов**: `"encryption"`, `"authentication"`, `"user:michan"`
+- **Преимущества**:
+    - Изоляция ключей: компрометация одного ключа не затрагивает другие
+    - Детерминизм: одинаковые входные данные дают одинаковые ключи
+    - Гибкость: произвольная длина ключей
+
+#### Особенности реализации:
+- **Основа**: HMAC-SHA256
+- **Контекст**: Уникальная строка для каждого производного ключа
+- **Детерминизм**: Одинаковые входные данные дают одинаковый ключ
+- **Разделение**: Разные контексты дают статистически независимые ключи
+
+#### Формула HKDF:
+```
+T1 = HMAC(master_key, context || INT_32_BE(1))
+T2 = HMAC(master_key, context || INT_32_BE(2))
+...
+Tn = HMAC(master_key, context || INT_32_BE(n))
+
+DerivedKey = T1 || T2 || ... || Tn (обрезается до нужной длины)
+```
+
+
+#### Базовое выведение ключа с PBKDF2:
+
+```bash
+   # Примеры использования
+   
+   # Базовое получение ключа с указанием соли
+    crypto derive --password "MySecurePassword123!" \
+    --salt a1b2c3d4e5f601234567890123456789 \
+    --iterations 100000 \
+    --length 32
+  # Вывод: <KEY_HEX>  a1b2c3d4e5f601234567890123456789
+
+  # Получение ключа с автоматической генерацией соли
+   crypto derive --password "AnotherPassword" \
+    --iterations 500000 \
+    --length 16
+  # Вывод: [INFO] Сгенерирована случайная соль: <SALT_HEX>
+  #        <KEY_HEX>  <SALT_HEX>
+  
+  # Запись ключа в файл
+  crypto derive --password "app_key" \
+    --salt 0123456789abcdef0123456789abcdef \
+    --iterations 100000 \
+    --length 32 \
+    --output tests/derived_key.bin
+  # Вывод: [INFO] Ключ (32 байт) записан в файл: derived_key.bin
+  #        <KEY_HEX>  0123456789abcdef0123456789abcdef
+  
+  # С минимальными итерациями (для тестирования RFC 6070 PBKDF2-HMAC-SHA256)
+  crypto derive -p "password" -s 73616c74 -c 1 -l 20
+  # Вывод: 120fb6cffcf8b32c43e7225256c4f837a86548c9  73616c74
+```
+
+#### Параметры команды derive (PBKDF2):
+- `--password (-p)`: Пароль для выведения ключа в виде строки
+- `--salt (-s)`: Соль в формате hex-строки
+- `--iterations (-c)`: Количество итераций PBKDF2
+- `--length (-l)`: Длина выведенного ключа в байтах
+- `--algorithm (-alg)`: Алгоритм KDF
+- `--output (-o)`: Выходной файл для сохранения ключа в бинарном виде
+
+#### Формат вывода для команды derive:
+* KEY_HEX SALT_HEX (оба в hex, разделены пробелом)
+* Ключ: запрошенной длины в hex
+* Соль: использованная соль в hex (предоставленная или сгенерированная)
+* При --output: ключ сохраняется как бинарные байты, соль не записывается
+
+#### Иерархическое выведение ключей (HKDF):
+
+```bash
+   # Используем master_key для выделения ключей из мастер-ключа
+   
+python3 -c "
+from cryptocoreedu.kdf.hkdf import derive_key
+
+master = b'master_secret_key_for_testing'
+
+key1 = derive_key(master, 'encryption', 32)
+key2 = derive_key(master, 'authentication', 32)
+key3 = derive_key(master, 'encryption', 32)  # Same as key1
+key4 = derive_key(master, 'user:michan', 64)
+
+print(f'Encryption key:     {key1.hex()}')
+print(f'Authentication key: {key2.hex()}')
+print(f'Encryption key (2): {key3.hex()}')
+print(f'User key: {key4.hex()}')
+print(f'Deterministic: {key1 == key3}')
+print(f'Different contexts produce different keys: {key1 != key2}')
+"
+```
+
 ### Автоматическая генерация ключей
 **При шифровании без указания ключа утилита автоматически генерирует криптографически стойкий ключ:**
 
@@ -969,6 +1110,110 @@ ls tests/aead/etm_wrong_key.txt 2>&1
 # Ожидаемый вывод: No such file or directory
 ```
 
+### Тестирование PBKDF2 и HKDF
+
+#### TEST-1 Known-Answer Tests
+```bash
+   # Тестовые векторы RFC 6070 PBKDF2-HMAC-SHA256
+   
+   # Test 1: 1 iteration
+   crypto derive -p "password" -s 73616c74 -c 1 -l 32
+   # Expected: 120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b
+   
+   # Test 2: 2 iterations  
+   crypto derive -p "password" -s 73616c74 -c 2 -l 32
+   # Expected: ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43
+   
+   # Test 3: 4096 iterations
+   crypto derive -p "password" -s 73616c74 -c 4096 -l 32
+   # Expected: c5e478d59288c841aa530db6845c4c8d962893a001ce4e11a4963873aa98134a
+   
+   # Test 4: 16777216 iterations
+   crypto derive -p "password" -s 73616c74 -c 16777216 -l 32
+   # Expected: cf81c66fe8cfc04d1f31ecb65dab4089f7f179e89b3b0bcb17ad10e3ac6eba46
+   
+   # Test 5:
+   crypto derive -p "passwordPASSWORDpassword" -s 73616C7453414C5473616C7453414C5473616C7453414C5473616C7453414C5473616C74 -c 4096 -l 40
+   # Expected: 348c89dbcbd32b2f32d814b8116e84cf2b17347ebc1800181c4e2a1fb8dd53e1c635518c7dac47e9
+```
+#### TEST-2 Iteration Test
+```bash
+   crypto derive -p "test_password" -s aabbccdd -c 1000 -l 32
+   crypto derive -p "test_password" -s aabbccdd -c 1000 -l 32
+   # Both should produce identical output
+```
+#### TEST-3 Length Test
+```bash
+   crypto derive -p "password" -s 73616c74 -c 100 -l 1
+   # Expected: 07
+   crypto derive -p "password" -s 73616c74 -c 100 -l 16
+   # Expected: 07e6997180cf7f12904f04100d405d34
+   crypto derive -p "password" -s 73616c74 -c 100 -l 32
+   # Expected: 07e6997180cf7f12904f04100d405d34888fdf62af6d506a0ecc23b196fe99d8
+   crypto derive -p "password" -s 73616c74 -c 100 -l 64
+   # Expected: 07e6997180cf7f12904f04100d405d34888fdf62af6d506a0ecc23b196fe99d8675294ec5aa7944b6a86c51fd97051bbefad5239c8fe47db259c296e98569a86
+   crypto derive -p "password" -s 73616c74 -c 100 -l 100
+   # Expected: 07e6997180cf7f12904f04100d405d34888fdf62af6d506a0ecc23b196fe99d8675294ec5aa7944b6a86c51fd97051bbefad5239c8fe47db259c296e98569a86dbd0101cb6ce6a25b4155bccbcb77b2719de3a76f0487e73373c1daa79a53ca6afcda549
+```
+#### TEST-4 Interoperability Test
+```bash
+   openssl kdf -keylen 32 -kdfopt digest:SHA256 -kdfopt pass:test -kdfopt hexsalt:1234567890abcdef -kdfopt iter:1000 PBKDF2
+   # Expected: 4C:D8:B5:C4:6A:EE:47:F0:D4:A6:A0:DD:7C:20:5B:1D:30:B5:4D:25:03:C1:3F:E7:42:2E:95:EA:31:2B:74:25
+   crypto derive -p "test" -s 1234567890abcdef -c 1000 -l 32
+   # Expected: 4cd8b5c46aee47f0d4a6a0dd7c205b1d30b54d2503c13fe7422e95ea312b7425  1234567890abcdef
+```
+#### TEST-5 Key Hierarchy Test
+```bash
+      
+python3 -c "
+from cryptocoreedu.kdf.hkdf import derive_key
+
+master = b'master_secret_key_for_testing'
+
+# вводим одинаковые параметры
+key1 = derive_key(master, 'encryption', 32)
+key2 = derive_key(master, 'encryption', 32)
+key3 = derive_key(master, 'encryption', 32)
+key4 = derive_key(master, 'encryption', 32)
+
+print(key1.hex())
+print(key2.hex())
+print(key3.hex())
+print(key4.hex())
+"
+
+# Все ключи должны быть одинаковы
+```
+#### TEST-6 Context Separation Test
+```bash
+python3 -c "
+from cryptocoreedu.kdf.hkdf import derive_key
+
+master = b'master_secret_key_for_testing'
+
+key1 = derive_key(master, 'encryption', 32)
+key2 = derive_key(master, 'authentication', 32)
+key3 = derive_key(master, 'storage', 32)
+key4 = derive_key(master, 'user:michan', 64)
+
+print(f'Encryption key:     {key1.hex()}')
+print(f'Authentication key: {key2.hex()}')
+print(f'Stotage key: {key3.hex()}')
+print(f'User key: {key4.hex()}')
+"
+```
+#### TEST-7 Salt Randomness Test
+```bash
+python3 -c "
+import sys
+sys.path.insert(0, '.')
+from cryptocoreedu.csprng import generate_random_bytes
+
+salts = set(generate_random_bytes(16).hex() for _ in range(1000))
+print(f'Unique salts: {len(salts)} out of 1000')
+print('PASSED' if len(salts) == 1000 else 'FAILED')
+"
+```
 ## Структура проекта
 
 ```
@@ -980,6 +1225,9 @@ CryptoCoreEdu/
 │       └──sha256.py       # Хэш-функция sha256
 │   └── mac/
 │       └──hmac.py     # HMAC функция
+│   └── kdf/
+│       ├──pbkdf2.py   # PBKDF2 реализация
+│       └──hkdf.py     # HKDF реализация
 │   └── utils/
 │       ├── padding.py     # Реализация паддинга по стандрату PKCS7
 │       └── validators.py  # Валидаторы для ключей, IV и файлов
@@ -1072,6 +1320,16 @@ diff -s tests/plain.txt tests/decrypted.txt
 * 121: Ошибка аутентификации AEAD
 
 * 122: Ошибка валидации nonce
+
+* 123: Ошибка kdf
+
+* 124: Ошибка валидация соли
+
+* 125: Ошибка обязательного пароля
+
+* 126: Ошибка неправильности итераций
+
+* 127: Ошибка длины
 
 ## Важные заметки
 

@@ -14,10 +14,12 @@ def create_parser():
         help='Команды',
         title='subcommands',
         description='valid subcommands',
-        metavar='{dgst}'
+        metavar='{dgst, derive}'
     )
 
-    # Основная команда crypto для шифрования/дешифрования (все аргументы необязательные)
+    # ==================== Основная команда crypto ====================
+    # Для шифрования/дешифрования
+
     parser.add_argument('--algorithm', '-alg', choices=['aes'],
                         help='Алгоритм шифрования')
     parser.add_argument('--mode', '-m', choices=['ecb', 'cbc', 'cfb', 'ofb', 'ctr', 'gcm', 'etm'],
@@ -30,27 +32,20 @@ def create_parser():
                             help='Режим дешифрования')
 
     parser.add_argument('--key', '-k', help='Ключ шифрования (128-бит)')
-
-    # CLI-4: --iv используется для nonce в GCM (сохраняем для обратной совместимости)
-    parser.add_argument(
-        '--iv',
-        help='Вектор инициализации / Nonce в hex формате (12 байт для GCM, 16 байт для других)'
-    )
-
-    # Дополнительный алиас --nonce для GCM (CLI-4)
-    parser.add_argument(
-        '--nonce',
-        help='Nonce для режима GCM (алиас для --iv, 12 байт в hex)'
-    )
-
+    parser.add_argument('--iv',
+                        help='Вектор инициализации / Nonce в hex формате')
+    parser.add_argument('--nonce',
+                        help='Nonce для режима GCM (алиас для --iv, 12 байт в hex)')
     parser.add_argument('--aad', type=str, default='',
-                        help='Ассоциированные аутентификационные данные в hex формате (для режима GCM)')
+                        help='Ассоциированные аутентификационные данные в hex формате')
 
     parser.add_argument('--input', '-i', type=Path, help='Входной файл')
     parser.add_argument('--output', '-o', type=Path, help='Выходной файл')
 
-    # Подкоманда dgst для хеширования
-    dgst_parser = subparsers.add_parser('dgst', help='Вычисление хеш-сумм')
+    # ==================== Подкоманда dgst ====================
+
+    dgst_parser = subparsers.add_parser('dgst', help='Вычисление хеш-сумм и HMAC',
+                                        allow_abbrev=False)
 
     dgst_parser.add_argument('--algorithm', '-alg',
                              choices=['sha256', 'sha3-256'],
@@ -62,24 +57,64 @@ def create_parser():
 
     dgst_parser.add_argument('--output', '-o', type=Path,
                              help='Выходной файл для записи хеша')
-    # hmac
-    dgst_parser.add_argument(
-        '--hmac',
-        action='store_true',
-        help='Включить режим HMAC (требует --key)'
+
+    dgst_parser.add_argument('--hmac', action='store_true',
+                             help='Включить режим HMAC (требует --key)')
+
+    dgst_parser.add_argument('--key', '-k', type=str,
+                             help='Секретный ключ в hex формате (обязателен для --hmac)')
+
+    dgst_parser.add_argument('--verify', '-v', type=Path,
+                             help='Файл с ожидаемым HMAC для верификации')
+
+    # ==================== Подкоманда derive ====================
+
+    derive_parser = subparsers.add_parser(
+        'derive',
+        help='Получение ключа из пароля (PBKDF2)',
+        allow_abbrev=False
     )
 
-    dgst_parser.add_argument(
-        '--key', '-k',
+    derive_parser.add_argument(
+        '--password', '-p',
         type=str,
-        help='Секретный ключ в hex формате (обязателен для --hmac)'
+        required=True,
+        help='Пароль для генерации ключа'
     )
 
-    # verify
-    dgst_parser.add_argument(
-        '--verify', '-v',
+    derive_parser.add_argument(
+        '--salt', '-s',
+        type=str,
+        default=None,
+        help='Соль в hex формате (если не указана, генерируется случайная 16-байтная)'
+    )
+
+    derive_parser.add_argument(
+        '--iterations', '-c',
+        type=int,
+        default=100000,
+        help='Количество итераций (по умолчанию: 100000)'
+    )
+
+    derive_parser.add_argument(
+        '--length', '-l',
+        type=int,
+        default=32,
+        help='Длина выходного ключа в байтах (по умолчанию: 32)'
+    )
+
+    derive_parser.add_argument(
+        '--algorithm', '-alg',
+        choices=['pbkdf2'],
+        default='pbkdf2',
+        help='Алгоритм получения ключа (по умолчанию: pbkdf2)'
+    )
+
+    derive_parser.add_argument(
+        '--output', '-o',
         type=Path,
-        help='Файл с ожидаемым HMAC для верификации'
+        default=None,
+        help='Файл для записи ключа (в бинарном формате)'
     )
 
     return parser
