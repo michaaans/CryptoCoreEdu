@@ -7,7 +7,7 @@
 pip install cryptocoreedu
 
 # Или конкретной версии
-pip install cryptocoreedu==0.2.4
+pip install cryptocoreedu==2.0.0
 ```
 
 ### Способ 2: Установка из исходного кода
@@ -199,7 +199,7 @@ crypto -alg aes -m ctr -dec -k 000102030405060708090a0b0c0d0e0f -i tests/documen
 ```bash
    # Хэширование без указания выходного файла (Linux/MacOS/WSL)
   crypto dgst -alg sha256 -i document.pdf
-  5d5b09f6dcb2d53a5fffc60c4ac0d55fb052072fa2fe5d95f011b5d5d5b0b0b5  document.pdf
+  #5d5b09f6dcb2d53a5fffc60c4ac0d55fb052072fa2fe5d95f011b5d5d5b0b0b5  document.pdf
   # Хэширование с указанием выходного файла
   crypto dgst -alg sha3-256 -i backup.tar -o backup.sha3
 ```

@@ -10,7 +10,7 @@
 pip install cryptocoreedu
 
 # Или конкретной версии
-pip install cryptocoreedu==0.2.4
+pip install cryptocoreedu==2.0.0
 ```
 
 ### Способ 2: Установка из исходного кода
@@ -575,7 +575,12 @@ print(f'Different contexts produce different keys: {key1 != key2}')
 
 ## Запуск автотестов
 ```shell
-python -m unittest discover -s tests/unit -p 'test_*.py' -v
+# Windows
+python -m unittest discover -s tests/ -p 'test_*.py' -v
+```
+```bash
+# bash
+python -m unittest discover -s tests/ -p 'test_*.py' -v
 ```
 
 ## Тесты на интероперабильность с OPENSSL производятся в ручном порядке
@@ -1254,11 +1259,10 @@ CryptoCoreEdu/
 ├── sts-2.1.2/            # Папка с тестами NIST (STS)
 ├── tests/                # Тесты
 │   ├── aead/             # Папка с файлами .txt/.bin
+│   ├── unit/             # Папка с unit-тестами
+│   ├── integration/      # Папка с интеграционными тестами
+│   ├── test_openssl.py   # Файл тестов на интероперабельность
 │   ├── plain.txt         # Файл plaintext'а
-│   ├── test.txt          # Файл для хэша
-│   ├── message.txt       # Файл для HMAC
-│   └── test_csprng.py    # Файл для теста уникальности ключа и IV
-├── extract_iv.py         # Функция выжимки IV из файлов (для удобства)
 ├── setup.py              # Файл сборки проекта
 ├── pyproject.toml        # Файл сборки
 └── README.md             # Документация
@@ -1279,7 +1283,6 @@ CryptoCoreEdu/
 
 ```bash
 diff -s tests/plain.txt tests/decrypted.txt
-
 # Вывод при успешной работе утилиты: Files tests/plain.txt and tests/decrypted.txt are identical
 ```
 
