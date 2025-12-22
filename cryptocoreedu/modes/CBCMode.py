@@ -10,17 +10,37 @@ from ..csprng import generate_random_bytes
 
 
 class CBCMode:
-    ''' Реализация режима CBC для AES-128 и реализация паддинга по стандарту PKCS7'''
+    """
+    Реализация режима CBC (Cipher Block Chaining) для AES-128 с паддингом PKCS7.
+
+    Атрибуты:
+        BLOCK_SIZE (int): Размер блока AES в байтах (16 байт).
+    """
 
     BLOCK_SIZE = 16
 
     def __init__(self, key: bytes):
+        """
+        Инициализация режима CBC с ключом.
 
+        Args:
+            key (bytes): Ключ для шифрования AES-128 (16 байт).
+        """
         self.key = key
         self.cipher = AES.new(self.key, AES.MODE_ECB)
         self.padding = PKCS7Padding
 
     def encrypt_file(self, input_file: Path, output_file: Path) -> None:
+        """
+        Шифрование файла в режиме CBC.
+
+        Args:
+            input_file (Path): Путь к исходному файлу.
+            output_file (Path): Путь к зашифрованному файлу.
+
+        Raises:
+            CryptoOperationError: При ошибках шифрования или ввода-вывода.
+        """
         try:
             plaintext = read_file(input_file)
             padded_data = self.padding.pad(plaintext)
@@ -57,6 +77,17 @@ class CBCMode:
             raise CryptoOperationError(f"Неизвестная ошибка при шифровании CBC: {error}")
 
     def decrypt_file(self, input_file: Path, output_file: Path, iv: bytes) -> None:
+        """
+        Дешифрование файла в режиме CBC.
+
+        Args:
+            input_file (Path): Путь к зашифрованному файлу.
+            output_file (Path): Путь к расшифрованному файлу.
+            iv (bytes): Вектор инициализации (IV). Если None, извлекается из файла.
+
+        Raises:
+            CryptoOperationError: При ошибках дешифрования или ввода-вывода.
+        """
         try:
             ciphertext = read_file(input_file)
 

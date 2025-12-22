@@ -133,7 +133,7 @@ crypto -alg aes -m cfb -dec -k 000102030405060708090a0b0c0d0e0f -i tests/documen
 
 ### Параметры командной строки
 - `--algorithm (-alg)`: Алгоритм шифрования (`aes`)
-- `--mode (-m)`: Режим работы (`ecb`, `cbc`, `cfb`, `ofb`, `ctr`)  
+- `--mode (-m)`: Режим работы (`ecb`, `cbc`, `cfb`, `ofb`, `ctr`, `gcm`, `etm`)  
 - `--encrypt (-enc)`: Режим шифрования
 - `--decrypt (-dec)`: Режим дешифрования
 - `--key (-k)`: Ключ шифрования (16 байт в hex-формате, необязателен при шифровании)
@@ -572,6 +572,13 @@ print(f'Different contexts produce different keys: {key1 != key2}')
 ```
 
 # Тестирование
+
+## Запуск автотестов
+```shell
+python -m unittest discover -s tests/unit -p 'test_*.py' -v
+```
+
+## Тесты на интероперабильность с OPENSSL производятся в ручном порядке
 
 ### Тестирование совместимости с OpenSSL
 

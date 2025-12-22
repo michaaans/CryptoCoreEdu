@@ -1,4 +1,3 @@
-
 import sys
 from pathlib import Path
 
@@ -13,14 +12,37 @@ except ImportError:
 
 
 def hmac_sha256(key: bytes, message: bytes) -> bytes:
+    """
+    Вычисление HMAC-SHA256 для сообщения с использованием ключа.
 
+    Args:
+        key (bytes): Ключ для HMAC.
+        message (bytes): Сообщение для хэширования.
+
+    Returns:
+        bytes: HMAC-SHA256 хэш.
+    """
     mac = HMAC(key)
     mac.update(message)
     return mac.digest()
 
 
 def pbkdf2_hmac_sha256(password, salt, iterations: int, dklen: int) -> bytes:
+    """
+    Реализация PBKDF2 с использованием HMAC-SHA256.
 
+    Args:
+        password: Пароль для деривации ключа.
+        salt: Соль для деривации ключа.
+        iterations (int): Количество итераций.
+        dklen (int): Длина производного ключа.
+
+    Returns:
+        bytes: Производный ключ.
+
+    Raises:
+        ValueError: Если итераций меньше 1 или длина ключа меньше 1.
+    """
     if iterations < 1:
         raise ValueError("Iterations must be at least 1")
     if dklen < 1:
@@ -56,7 +78,18 @@ def pbkdf2_hmac_sha256(password, salt, iterations: int, dklen: int) -> bytes:
 
 
 def _pbkdf2_f(password: bytes, salt: bytes, iterations: int, block_num: int) -> bytes:
+    """
+    Функция F для PBKDF2 (обработка одного блока).
 
+    Args:
+        password (bytes): Пароль для деривации ключа.
+        salt (bytes): Соль для деривации ключа.
+        iterations (int): Количество итераций.
+        block_num (int): Номер блока.
+
+    Returns:
+        bytes: Блок производного ключа.
+    """
     u_prev = hmac_sha256(password, salt + block_num.to_bytes(4, 'big'))
 
     result = bytearray(u_prev)
@@ -73,13 +106,28 @@ def _pbkdf2_f(password: bytes, salt: bytes, iterations: int, block_num: int) -> 
 
 
 class PBKDF2:
+    """
+    Реализация PBKDF2 (Password-Based Key Derivation Function 2).
+
+    Атрибуты:
+        DEFAULT_ITERATIONS (int): Количество итераций по умолчанию.
+        DEFAULT_KEY_LENGTH (int): Длина ключа по умолчанию.
+        HASH_OUTPUT_SIZE (int): Размер выхода хэш-функции.
+    """
 
     DEFAULT_ITERATIONS = 100000
     DEFAULT_KEY_LENGTH = 32
     HASH_OUTPUT_SIZE = 32
 
     def __init__(self, password, salt: bytes = None, iterations: int = None):
+        """
+        Инициализация PBKDF2.
 
+        Args:
+            password: Пароль для деривации ключа.
+            salt (bytes): Соль для деривации ключа.
+            iterations (int): Количество итераций.
+        """
         if isinstance(password, str):
             self.password = password.encode('utf-8')
         else:
@@ -94,7 +142,15 @@ class PBKDF2:
         self.iterations = iterations or self.DEFAULT_ITERATIONS
 
     def derive(self, length: int = None) -> bytes:
+        """
+        Деривация ключа из пароля.
 
+        Args:
+            length (int): Длина производного ключа.
+
+        Returns:
+            bytes: Производный ключ.
+        """
         length = length or self.DEFAULT_KEY_LENGTH
         return pbkdf2_hmac_sha256(
             self.password,
@@ -104,6 +160,13 @@ class PBKDF2:
         )
 
     def derive_hex(self, length: int = None) -> str:
+        """
+        Деривация ключа с возвратом в шестнадцатеричном формате.
 
+        Args:
+            length (int): Длина производного ключа.
+
+        Returns:
+            str: Производный ключ в шестнадцатеричном формате.
+        """
         return self.derive(length).hex()
-

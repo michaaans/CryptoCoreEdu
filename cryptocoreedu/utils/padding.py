@@ -6,14 +6,25 @@ from ..exceptions import CryptoOperationError
 
 
 class PKCS7Padding:
-    """Реализация паддинга по стандарту PKCS7"""
+    """Реализация паддинга по стандарту PKCS7.
+
+    Атрибуты:
+        BLOCK_SIZE (int): Размер блока для паддинга (16 байт).
+    """
 
     BLOCK_SIZE = 16
 
     @staticmethod
     def constant_time_compare(a: bytes, b: bytes) -> bool:
         """
-        Сравнение с постоянным временем для защиты от timing attacks
+        Сравнение с постоянным временем для защиты от timing attacks.
+
+        Args:
+            a (bytes): Первая байтовая последовательность.
+            b (bytes): Вторая байтовая последовательность.
+
+        Returns:
+            bool: True если последовательности равны, иначе False.
         """
         if len(a) != len(b):
             return False
@@ -26,7 +37,13 @@ class PKCS7Padding:
     @classmethod
     def pad(cls, data: bytes) -> bytes:
         """
-        Добавляет паддинг PKCS7 к данным
+        Добавляет паддинг PKCS7 к данным.
+
+        Args:
+            data (bytes): Исходные данные.
+
+        Returns:
+            bytes: Данные с добавленным паддингом.
         """
         if len(data) % cls.BLOCK_SIZE == 0:
             pad_len = cls.BLOCK_SIZE
@@ -37,7 +54,16 @@ class PKCS7Padding:
     @classmethod
     def unpad(cls, data: bytes) -> bytes:
         """
-        Удаляет паддинг PKCS7 из данных
+        Удаляет паддинг PKCS7 из данных.
+
+        Args:
+            data (bytes): Данные с паддингом.
+
+        Returns:
+            bytes: Данные без паддинга.
+
+        Raises:
+            CryptoOperationError: Если паддинг некорректен.
         """
         if not data:
             return data

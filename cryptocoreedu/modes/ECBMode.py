@@ -9,18 +9,37 @@ import sys
 
 
 class ECBMode:
-    ''' Реализация режима ECB для AES-128 и реализация паддинга по стандарту PKCS7'''
+    """
+    Реализация режима ECB (Electronic Codebook) для AES-128 с паддингом PKCS7.
+
+    Атрибуты:
+        BLOCK_SIZE (int): Размер блока AES в байтах (16 байт).
+    """
 
     BLOCK_SIZE = 16
 
     def __init__(self, key: bytes):
+        """
+        Инициализация режима ECB с ключом.
 
+        Args:
+            key (bytes): Ключ для шифрования AES-128 (16 байт).
+        """
         self.key = key
         self.cipher = AES.new(self.key, AES.MODE_ECB)
         self.padding = PKCS7Padding
 
     def encrypt_file(self, input_file: Path, output_file: Path) -> None:
+        """
+        Шифрование файла в режиме ECB.
 
+        Args:
+            input_file (Path): Путь к исходному файлу.
+            output_file (Path): Путь к зашифрованному файлу.
+
+        Raises:
+            CryptoOperationError: При ошибках шифрования или ввода-вывода.
+        """
         try:
             plaintext = read_file(input_file)
             padded_data = self.padding.pad(plaintext)
@@ -39,7 +58,16 @@ class ECBMode:
             raise CryptoOperationError(f"Неизвестная ошибка при шифровании ECB: {error}")
 
     def decrypt_file(self, input_file: Path, output_file: Path) -> None:
+        """
+        Дешифрование файла в режиме ECB.
 
+        Args:
+            input_file (Path): Путь к зашифрованному файлу.
+            output_file (Path): Путь к расшифрованному файлу.
+
+        Raises:
+            CryptoOperationError: При ошибках дешифрования или ввода-вывода.
+        """
         try:
             ciphertext = read_file(input_file)
 

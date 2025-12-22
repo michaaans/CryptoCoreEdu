@@ -7,15 +7,36 @@ from ..csprng import generate_random_bytes
 
 
 class CFBMode:
-    '''Реализация режима CFB (Cipher Feedback) для AES-128 как потокового шифра'''
+    """
+    Реализация режима CFB (Cipher Feedback) для AES-128 как потокового шифра.
+
+    Атрибуты:
+        BLOCK_SIZE (int): Размер блока AES в байтах (16 байт).
+    """
 
     BLOCK_SIZE = 16
 
     def __init__(self, key: bytes):
+        """
+        Инициализация режима CFB с ключом.
+
+        Args:
+            key (bytes): Ключ для шифрования AES-128 (16 байт).
+        """
         self.key = key
         self.cipher = AES.new(self.key, AES.MODE_ECB)
 
     def encrypt_file(self, input_file: Path, output_file: Path) -> None:
+        """
+        Шифрование файла в режиме CFB.
+
+        Args:
+            input_file (Path): Путь к исходному файлу.
+            output_file (Path): Путь к зашифрованному файлу.
+
+        Raises:
+            CryptoOperationError: При ошибках шифрования или ввода-вывода.
+        """
         try:
             plaintext = read_file(input_file)
 
@@ -51,6 +72,17 @@ class CFBMode:
             raise CryptoOperationError(f"Неизвестная ошибка при шифровании CFB: {error}")
 
     def decrypt_file(self, input_file: Path, output_file: Path, iv: bytes) -> None:
+        """
+        Дешифрование файла в режиме CFB.
+
+        Args:
+            input_file (Path): Путь к зашифрованному файлу.
+            output_file (Path): Путь к расшифрованному файлу.
+            iv (bytes): Вектор инициализации (IV). Если None, извлекается из файла.
+
+        Raises:
+            CryptoOperationError: При ошибках дешифрования или ввода-вывода.
+        """
         try:
             ciphertext = read_file(input_file)
 

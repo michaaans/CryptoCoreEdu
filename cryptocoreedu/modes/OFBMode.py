@@ -1,4 +1,3 @@
-
 from Crypto.Cipher import AES
 from pathlib import Path
 
@@ -8,15 +7,36 @@ from ..csprng import generate_random_bytes
 
 
 class OFBMode:
-    '''Реализация режима OFB (Output Feedback) для AES-128 как потокового шифра'''
+    """
+    Реализация режима OFB (Output Feedback) для AES-128 как потокового шифра.
+
+    Атрибуты:
+        BLOCK_SIZE (int): Размер блока AES в байтах (16 байт).
+    """
 
     BLOCK_SIZE = 16
 
     def __init__(self, key: bytes):
+        """
+        Инициализация режима OFB с ключом.
+
+        Args:
+            key (bytes): Ключ для шифрования AES-128 (16 байт).
+        """
         self.key = key
         self.cipher = AES.new(self.key, AES.MODE_ECB)
 
     def encrypt_file(self, input_file: Path, output_file: Path) -> None:
+        """
+        Шифрование файла в режиме OFB.
+
+        Args:
+            input_file (Path): Путь к исходному файлу.
+            output_file (Path): Путь к зашифрованному файлу.
+
+        Raises:
+            CryptoOperationError: При ошибках шифрования или ввода-вывода.
+        """
         try:
             plaintext = read_file(input_file)
 
@@ -48,6 +68,17 @@ class OFBMode:
             raise CryptoOperationError(f"Неизвестная ошибка при шифровании OFB: {error}")
 
     def decrypt_file(self, input_file: Path, output_file: Path, iv: bytes) -> None:
+        """
+        Дешифрование файла в режиме OFB.
+
+        Args:
+            input_file (Path): Путь к зашифрованному файлу.
+            output_file (Path): Путь к расшифрованному файлу.
+            iv (bytes): Вектор инициализации (IV). Если None, извлекается из файла.
+
+        Raises:
+            CryptoOperationError: При ошибках дешифрования или ввода-вывода.
+        """
         try:
             ciphertext = read_file(input_file)
 

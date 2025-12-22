@@ -3,6 +3,7 @@ from pathlib import Path
 
 
 def read_file(file_path: Path) -> bytes:
+    """Чтение данных из файла в бинарном режиме"""
     try:
         with open(file_path, "rb") as file:
             return file.read()
@@ -12,6 +13,7 @@ def read_file(file_path: Path) -> bytes:
 
 
 def write_file(file_path: Path, data: bytes) -> None:
+    """Запись данных в файл в бинарном режиме"""
     try:
         file_path.parent.mkdir(parents=True, exist_ok=True)
 

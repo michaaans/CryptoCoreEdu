@@ -1,4 +1,3 @@
-
 import sys
 from pathlib import Path
 
@@ -13,14 +12,36 @@ except ImportError:
 
 
 def hmac_sha256(key: bytes, message: bytes) -> bytes:
+    """
+    Вычисление HMAC-SHA256 для сообщения с использованием ключа.
 
+    Args:
+        key (bytes): Ключ для HMAC.
+        message (bytes): Сообщение для хэширования.
+
+    Returns:
+        bytes: HMAC-SHA256 хэш.
+    """
     mac = HMAC(key)
     mac.update(message)
     return mac.digest()
 
 
 def derive_key(master_key: bytes, context: str, length: int = 32) -> bytes:
+    """
+    Производный ключ из мастер-ключа с использованием контекста.
 
+    Args:
+        master_key (bytes): Мастер-ключ для деривации.
+        context (str): Контекст для деривации ключа.
+        length (int): Длина производного ключа в байтах.
+
+    Returns:
+        bytes: Производный ключ.
+
+    Raises:
+        ValueError: Если мастер-ключ пуст или длина меньше 1.
+    """
     if not master_key:
         raise ValueError("Master key cannot be empty")
     if length < 1:
@@ -43,11 +64,25 @@ def derive_key(master_key: bytes, context: str, length: int = 32) -> bytes:
 
 
 class KeyHierarchy:
+    """
+    Иерархия ключей для деривации производных ключей из мастер-ключа.
+
+    Атрибуты:
+        DEFAULT_KEY_LENGTH (int): Длина ключа по умолчанию.
+    """
 
     DEFAULT_KEY_LENGTH = 32
 
     def __init__(self, master_key: bytes):
+        """
+        Инициализация иерархии ключей.
 
+        Args:
+            master_key (bytes): Мастер-ключ для деривации.
+
+        Raises:
+            ValueError: Если мастер-ключ пуст.
+        """
         if not master_key:
             raise ValueError("Master key cannot be empty")
 
@@ -61,7 +96,17 @@ class KeyHierarchy:
         self._cache = {}
 
     def derive(self, context: str, length: int = None, cache: bool = True) -> bytes:
+        """
+        Деривация ключа из мастер-ключа по контексту.
 
+        Args:
+            context (str): Контекст для деривации ключа.
+            length (int): Длина производного ключа в байтах.
+            cache (bool): Флаг кэширования результата.
+
+        Returns:
+            bytes: Производный ключ.
+        """
         length = length or self.DEFAULT_KEY_LENGTH
         cache_key = (context, length)
 
@@ -76,9 +121,20 @@ class KeyHierarchy:
         return derived
 
     def derive_hex(self, context: str, length: int = None) -> str:
+        """
+        Деривация ключа с возвратом в шестнадцатеричном формате.
 
+        Args:
+            context (str): Контекст для деривации ключа.
+            length (int): Длина производного ключа в байтах.
+
+        Returns:
+            str: Производный ключ в шестнадцатеричном формате.
+        """
         return self.derive(context, length).hex()
 
     def clear_cache(self):
+        """
+        Очистка кэша производных ключей.
+        """
         self._cache.clear()
-

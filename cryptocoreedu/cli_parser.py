@@ -3,6 +3,12 @@ from pathlib import Path
 
 
 def create_parser():
+    """
+    Создание парсера аргументов командной строки для CryptoCore.
+
+    Returns:
+        argparse.ArgumentParser: Настроенный парсер аргументов.
+    """
     parser = argparse.ArgumentParser(
         description='CryptoCore - Cryptographic Tool',
         prog='crypto',

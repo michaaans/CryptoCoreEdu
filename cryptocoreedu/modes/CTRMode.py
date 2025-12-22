@@ -7,23 +7,51 @@ from ..csprng import generate_random_bytes
 
 
 class CTRMode:
-    '''Реализация режима CTR (Counter) для AES-128 как потокового шифра'''
+    """
+    Реализация режима CTR (Counter) для AES-128 как потокового шифра.
+
+    Атрибуты:
+        BLOCK_SIZE (int): Размер блока AES в байтах (16 байт).
+    """
 
     BLOCK_SIZE = 16
 
     def __init__(self, key: bytes):
+        """
+        Инициализация режима CTR с ключом.
+
+        Args:
+            key (bytes): Ключ для шифрования AES-128 (16 байт).
+        """
         self.key = key
         # Создаем базовый cipher для шифрования отдельных блоков
         self.cipher = AES.new(self.key, AES.MODE_ECB)
 
     def _increment_counter(self, counter: bytes) -> bytes:
+        """
+        Инкрементирование счетчика на 1.
 
+        Args:
+            counter (bytes): Текущее значение счетчика (16 байт).
+
+        Returns:
+            bytes: Увеличенное значение счетчика.
+        """
         counter_int = int.from_bytes(counter, byteorder='big')
         counter_int = (counter_int + 1) & ((1 << 128) - 1)
         return counter_int.to_bytes(16, byteorder='big')
 
     def encrypt_file(self, input_file: Path, output_file: Path) -> None:
+        """
+        Шифрование файла в режиме CTR.
 
+        Args:
+            input_file (Path): Путь к исходному файлу.
+            output_file (Path): Путь к зашифрованному файлу.
+
+        Raises:
+            CryptoOperationError: При ошибках шифрования или ввода-вывода.
+        """
         try:
             plaintext = read_file(input_file)
 
@@ -59,7 +87,17 @@ class CTRMode:
             raise CryptoOperationError(f"Неизвестная ошибка при шифровании CTR: {error}")
 
     def decrypt_file(self, input_file: Path, output_file: Path, iv: bytes) -> None:
+        """
+        Дешифрование файла в режиме CTR.
 
+        Args:
+            input_file (Path): Путь к зашифрованному файлу.
+            output_file (Path): Путь к расшифрованному файлу.
+            iv (bytes): Вектор инициализации (nonce). Если None, извлекается из файла.
+
+        Raises:
+            CryptoOperationError: При ошибках дешифрования или ввода-вывода.
+        """
         try:
             ciphertext = read_file(input_file)
 

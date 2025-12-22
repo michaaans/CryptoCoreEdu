@@ -1,10 +1,15 @@
-
 from ..hash.sha256 import SHA256
 
 
 class HMAC:
     """
-        Реализация HMAC-SHA256 по стандарту RFC 2104
+    Реализация HMAC-SHA256 по стандарту RFC 2104.
+
+    Атрибуты:
+        BLOCK_SIZE (int): Размер блока для HMAC в байтах.
+        OUTPUT_SIZE (int): Размер выходного HMAC в байтах.
+        IPAD_BYTE (int): Байт для внутреннего padding.
+        OPAD_BYTE (int): Байт для внешнего padding.
     """
     BLOCK_SIZE = 64
 
@@ -14,7 +19,16 @@ class HMAC:
     OPAD_BYTE = 0x5c
 
     def __init__(self, key: bytes, hash_class=None):
+        """
+        Инициализация HMAC с ключом.
 
+        Args:
+            key (bytes): Ключ для HMAC.
+            hash_class: Класс хэш-функции (по умолчанию SHA256).
+
+        Raises:
+            TypeError: Если ключ не в байтовом формате.
+        """
         if hash_class is None:
             hash_class = SHA256
 
@@ -44,7 +58,15 @@ class HMAC:
         self._result_cache = None
 
     def _process_key(self, key: bytes) -> bytes:
+        """
+        Обработка ключа: хэширование или дополнение до размера блока.
 
+        Args:
+            key (bytes): Исходный ключ.
+
+        Returns:
+            bytes: Обработанный ключ.
+        """
         if len(key) > self.block_size:
             hasher = self.hash_class()
             hasher.update(key)
@@ -57,11 +79,32 @@ class HMAC:
 
     @staticmethod
     def _xor_bytes(a: bytes, b: bytes) -> bytes:
+        """
+        Побитовое XOR двух байтовых последовательностей.
 
+        Args:
+            a (bytes): Первая байтовая последовательность.
+            b (bytes): Вторая байтовая последовательность.
+
+        Returns:
+            bytes: Результат XOR.
+        """
         return bytes(x ^ y for x, y in zip(a, b))
 
     def update(self, data: bytes) -> 'HMAC':
+        """
+        Добавление данных для HMAC вычисления.
 
+        Args:
+            data (bytes): Данные для добавления.
+
+        Returns:
+            HMAC: Текущий экземпляр HMAC.
+
+        Raises:
+            RuntimeError: Если HMAC уже завершен.
+            TypeError: Если данные не в байтовом формате.
+        """
         if self._finalized:
             raise RuntimeError("HMAC уже завершен. Создайте новый экземпляр.")
 
@@ -75,7 +118,12 @@ class HMAC:
         return self
 
     def digest(self) -> bytes:
+        """
+        Получение HMAC в виде байтов.
 
+        Returns:
+            bytes: HMAC в виде байтовой строки.
+        """
         if self._finalized:
             return self._result_cache
 
@@ -91,12 +139,26 @@ class HMAC:
         return self._result_cache
 
     def hexdigest(self) -> str:
+        """
+        Получение HMAC в виде шестнадцатеричной строки.
 
+        Returns:
+            str: HMAC в виде шестнадцатеричной строки.
+        """
         return self.digest().hex()
 
 
 def hmac_data(key: bytes, data: bytes) -> str:
+    """
+    Вычисление HMAC для данных.
 
+    Args:
+        key (bytes): Ключ для HMAC.
+        data (bytes): Данные для хэширования.
+
+    Returns:
+        str: HMAC в виде шестнадцатеричной строки.
+    """
     if isinstance(data, str):
         data = data.encode('utf-8')
     if isinstance(key, str):
@@ -107,8 +169,18 @@ def hmac_data(key: bytes, data: bytes) -> str:
     return mac.hexdigest()
 
 
-def hmac_file(key: bytes, filename: str, chunk_size: int = 8096) -> str: #131072
+def hmac_file(key: bytes, filename: str, chunk_size: int = 8096) -> str:  # 131072
+    """
+    Вычисление HMAC для файла.
 
+    Args:
+        key (bytes): Ключ для HMAC.
+        filename (str): Путь к файлу.
+        chunk_size (int): Размер чанка для чтения файла.
+
+    Returns:
+        str: HMAC в виде шестнадцатеричной строки.
+    """
     if isinstance(key, str):
         key = key.encode('utf-8')
 
@@ -125,7 +197,16 @@ def hmac_file(key: bytes, filename: str, chunk_size: int = 8096) -> str: #131072
 
 
 def verify_hmac(expected_hmac: str, computed_hmac: str) -> bool:
+    """
+    Проверка HMAC на соответствие ожидаемому значению.
 
+    Args:
+        expected_hmac (str): Ожидаемый HMAC.
+        computed_hmac (str): Вычисленный HMAC.
+
+    Returns:
+        bool: True если HMAC совпадают, иначе False.
+    """
     expected_hmac = expected_hmac.lower().strip()
     computed_hmac = computed_hmac.lower().strip()
 
@@ -140,7 +221,18 @@ def verify_hmac(expected_hmac: str, computed_hmac: str) -> bool:
 
 
 def parse_hmac_file(filepath: str) -> tuple:
+    """
+    Парсинг файла с HMAC и именем файла.
 
+    Args:
+        filepath (str): Путь к файлу с HMAC.
+
+    Returns:
+        tuple: Кортеж (hmac_value, filename).
+
+    Raises:
+        ValueError: Если файл пустой или имеет неверный формат.
+    """
     with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read().strip()
 
@@ -159,4 +251,3 @@ def parse_hmac_file(filepath: str) -> tuple:
         return hmac_value, filename
 
     raise ValueError(f"Неверный формат файла HMAC: {filepath}")
-

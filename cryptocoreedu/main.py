@@ -32,7 +32,11 @@ from .kdf.hkdf import derive_key
 
 class CryptoApp:
     """
-    Основной класс приложения, управляющий всей логикой
+    Основной класс приложения, управляющий всей логикой выполнения криптографических операций.
+
+    Атрибуты:
+        ERROR_CODES (dict): Словарь кодов ошибок для различных ситуаций.
+        AEAD_MODES (set): Множество режимов с аутентифицированным шифрованием.
     """
 
     # Коды ошибок
@@ -69,10 +73,21 @@ class CryptoApp:
     AEAD_MODES = {'gcm', 'etm'}
 
     def __init__(self):
+        """
+        Инициализация приложения с созданием парсера аргументов командной строки.
+        """
         self.parser = create_parser()
 
     def validate_derive_arguments(self, args):
+        """
+        Валидация аргументов для команды derive.
 
+        Args:
+            args: Аргументы командной строки.
+
+        Returns:
+            tuple: Кортеж (password, salt_bytes, iterations, length, output_path).
+        """
         # Валидация пароля
         if not args.password:
             print_error("Пароль обязателен", "Укажите --password")
@@ -152,7 +167,17 @@ class CryptoApp:
     def execute_derive_operation(self, password: str, salt: bytes,
                                  iterations: int, length: int,
                                  algorithm: str, output_path: Path = None):
+        """
+        Выполнение операции деривации ключа.
 
+        Args:
+            password (str): Пароль для деривации.
+            salt (bytes): Соль для деривации.
+            iterations (int): Количество итераций.
+            length (int): Длина выходного ключа.
+            algorithm (str): Алгоритм деривации.
+            output_path (Path): Путь для сохранения ключа (опционально).
+        """
         try:
             if algorithm == 'pbkdf2':
                 # Вычисление ключа с помощью PBKDF2-HMAC-SHA256
@@ -184,6 +209,15 @@ class CryptoApp:
             sys.exit(self.ERROR_CODES['kdf_error'])
 
     def validate_aad(self, aad_hex: str) -> bytes:
+        """
+        Валидация и преобразование AAD (Additional Authenticated Data).
+
+        Args:
+            aad_hex (str): AAD в hex формате.
+
+        Returns:
+            bytes: AAD в байтовом формате.
+        """
         if not aad_hex:
             return b''
 
@@ -215,6 +249,16 @@ class CryptoApp:
             sys.exit(self.ERROR_CODES['aad_validation'])
 
     def validate_nonce(self, nonce_hex: str, mode: str) -> bytes:
+        """
+        Валидация и преобразование nonce/IV.
+
+        Args:
+            nonce_hex (str): Nonce/IV в hex формате.
+            mode (str): Режим шифрования.
+
+        Returns:
+            bytes: Nonce/IV в байтовом формате.
+        """
         if not nonce_hex:
             return None
 
@@ -267,6 +311,15 @@ class CryptoApp:
         return nonce_bytes
 
     def validate_crypto_arguments(self, args):
+        """
+        Валидация аргументов для операций шифрования/дешифрования.
+
+        Args:
+            args: Аргументы командной строки.
+
+        Returns:
+            tuple: Кортеж (key, iv, input_path, output_path, aad).
+        """
         key = self.validate_key_argument(args)
 
         nonce_hex = None
@@ -321,6 +374,15 @@ class CryptoApp:
         return key, iv, input_path, output_path, aad
 
     def validate_hash_arguments(self, args):
+        """
+        Валидация аргументов для операций хэширования.
+
+        Args:
+            args: Аргументы командной строки.
+
+        Returns:
+            tuple: Кортеж (input_path, output_path).
+        """
         try:
             input_path = validate_file_path(args.input, for_reading=True)
         except FileValidationError as e:
@@ -338,6 +400,15 @@ class CryptoApp:
         return input_path, output_path
 
     def validate_hmac_arguments(self, args):
+        """
+        Валидация аргументов для операций HMAC.
+
+        Args:
+            args: Аргументы командной строки.
+
+        Returns:
+            tuple: Кортеж (key_bytes, input_path, output_path, verify_path).
+        """
         if not args.key:
             print_error(
                 "Ключ обязателен для HMAC",
@@ -398,6 +469,15 @@ class CryptoApp:
         return key_bytes, input_path, output_path, verify_path
 
     def validate_key_argument(self, args):
+        """
+        Валидация ключа шифрования.
+
+        Args:
+            args: Аргументы командной строки.
+
+        Returns:
+            bytes: Ключ в байтовом формате.
+        """
         if args.decrypt and not args.key:
             print_error("Ключ обязателен для дешифрования")
             sys.exit(self.ERROR_CODES['key_required'])
@@ -420,6 +500,17 @@ class CryptoApp:
                 sys.exit(self.ERROR_CODES['key_validation'])
 
     def create_cipher(self, algorithm: str, mode: str, key: bytes):
+        """
+        Создание объекта шифрования на основе алгоритма и режима.
+
+        Args:
+            algorithm (str): Алгоритм шифрования (например, 'aes').
+            mode (str): Режим работы (например, 'cbc', 'gcm').
+            key (bytes): Ключ шифрования.
+
+        Returns:
+            object: Объект шифрования соответствующего режима.
+        """
         try:
             if algorithm == 'aes':
                 if mode == 'ecb':
@@ -451,6 +542,18 @@ class CryptoApp:
 
     def execute_crypto_operation(self, cipher, operation: str, input_path: Path,
                                  output_path: Path, iv: bytes, mode: str, aad: bytes = b""):
+        """
+        Выполнение операции шифрования или дешифрования.
+
+        Args:
+            cipher: Объект шифрования.
+            operation (str): Тип операции ('encrypt' или 'decrypt').
+            input_path (Path): Путь к входному файлу.
+            output_path (Path): Путь к выходному файлу.
+            iv (bytes): Вектор инициализации.
+            mode (str): Режим шифрования.
+            aad (bytes): Дополнительные аутентифицированные данные.
+        """
         try:
             if operation == 'encrypt':
                 if mode in self.AEAD_MODES:
@@ -494,6 +597,14 @@ class CryptoApp:
             sys.exit(self.ERROR_CODES['unknown_operation'])
 
     def execute_hash_operation(self, algorithm: str, input_path: Path, output_path: Path = None):
+        """
+        Выполнение операции хэширования.
+
+        Args:
+            algorithm (str): Алгоритм хэширования.
+            input_path (Path): Путь к входному файлу.
+            output_path (Path): Путь для сохранения результата (опционально).
+        """
         try:
             if algorithm == 'sha256':
                 hash_result = sha256_file(str(input_path))
@@ -520,6 +631,15 @@ class CryptoApp:
 
     def execute_hmac_operation(self, key: bytes, input_path: Path,
                                output_path: Path = None, verify_path: Path = None):
+        """
+        Выполнение операции HMAC.
+
+        Args:
+            key (bytes): Ключ для HMAC.
+            input_path (Path): Путь к входному файлу.
+            output_path (Path): Путь для сохранения результата (опционально).
+            verify_path (Path): Путь к файлу для верификации (опционально).
+        """
         try:
             computed_hmac = hmac_file(key, str(input_path), chunk_size=131072)
 
@@ -551,7 +671,11 @@ class CryptoApp:
             sys.exit(self.ERROR_CODES['hash_operation_error'])
 
     def run(self):
-        """Главный метод запуска приложения"""
+        """
+        Главный метод запуска приложения.
+
+        Обрабатывает аргументы командной строки и выполняет соответствующие операции.
+        """
         try:
             args = self.parser.parse_args()
 
@@ -604,6 +728,9 @@ class CryptoApp:
 
 
 def main():
+    """
+    Точка входа в приложение.
+    """
     app = CryptoApp()
     app.run()
 
