@@ -2,4 +2,4 @@
 from .main import main
 # from .file_io import read_file, write_file
 
-__version__ = "2.0.0" # ОБНОВЛЕНИЕ ВЕРСИИ ПРИ КАЖДОМ ВЫПУСКЕ
+__version__ = "2.0.1" # ОБНОВЛЕНИЕ ВЕРСИИ ПРИ КАЖДОМ ВЫПУСКЕ

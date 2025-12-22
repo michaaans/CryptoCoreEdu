@@ -7,7 +7,7 @@
 pip install cryptocoreedu
 
 # Или конкретной версии
-pip install cryptocoreedu==2.0.0
+pip install cryptocoreedu==2.0.1
 ```
 
 ### Способ 2: Установка из исходного кода
