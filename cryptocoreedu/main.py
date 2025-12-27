@@ -68,6 +68,11 @@ class CryptoApp:
         'password_required': 125,
         'iterations_invalid': 126,
         'length_invalid': 127,
+        'master_key_required': 128,
+        'master_key_invalid': 129,
+        'context_required': 130,
+        'hkdf_error': 131,
+        'derive_args_conflict': 132,
     }
 
     AEAD_MODES = {'gcm', 'etm'}
@@ -80,7 +85,7 @@ class CryptoApp:
 
     def validate_derive_arguments(self, args):
         """
-        Валидация аргументов для команды derive.
+        Валидация аргументов для команды derive (PBKDF2).
 
         Args:
             args: Аргументы командной строки.
@@ -90,7 +95,7 @@ class CryptoApp:
         """
         # Валидация пароля
         if not args.password:
-            print_error("Пароль обязателен", "Укажите --password")
+            print_error("Пароль обязателен для PBKDF2", "Укажите --password")
             sys.exit(self.ERROR_CODES['password_required'])
 
         password = args.password
@@ -164,32 +169,116 @@ class CryptoApp:
 
         return password, salt_bytes, iterations, length, output_path
 
+    def validate_hkdf_arguments(self, args):
+        """
+        Валидация аргументов для команды derive с HKDF.
+
+        Args:
+            args: Аргументы командной строки.
+
+        Returns:
+            tuple: Кортеж (master_key_bytes, context, length, output_path).
+        """
+        # Валидация мастер-ключа
+        if not args.master_key:
+            print_error("Мастер-ключ обязателен для HKDF", "Укажите --master-key (-msk)")
+            sys.exit(self.ERROR_CODES['master_key_required'])
+
+        master_key_hex = args.master_key.strip()
+
+        # Проверка на пустой ключ
+        if len(master_key_hex) == 0:
+            print_error("Мастер-ключ не может быть пустым")
+            sys.exit(self.ERROR_CODES['master_key_invalid'])
+
+        # Проверка hex формата
+        if len(master_key_hex) % 2 != 0:
+            print_error(
+                "Некорректная длина мастер-ключа",
+                f"Hex строка должна иметь чётное количество символов. Получено: {len(master_key_hex)}"
+            )
+            sys.exit(self.ERROR_CODES['master_key_invalid'])
+
+        valid_hex_chars = set('0123456789abcdefABCDEF')
+        invalid_chars = set(master_key_hex) - valid_hex_chars
+        if invalid_chars:
+            print_error(
+                "Некорректные символы в мастер-ключе",
+                f"Допустимы только hex символы. Найдены: {invalid_chars}"
+            )
+            sys.exit(self.ERROR_CODES['master_key_invalid'])
+
+        try:
+            master_key_bytes = bytes.fromhex(master_key_hex)
+        except ValueError as e:
+            print_error("Ошибка преобразования мастер-ключа", str(e))
+            sys.exit(self.ERROR_CODES['master_key_invalid'])
+
+        # Предупреждение о коротком ключе
+        if len(master_key_bytes) < 16:
+            print_warning(
+                f"Короткий мастер-ключ ({len(master_key_bytes)} байт). "
+                "Рекомендуется минимум 16 байт (128 бит)."
+            )
+
+        # Валидация контекста
+        if not args.context:
+            print_error("Контекст обязателен для HKDF", "Укажите --context (-con)")
+            sys.exit(self.ERROR_CODES['context_required'])
+
+        context = args.context
+
+        # Валидация длины ключа
+        length = args.length
+        if length < 1:
+            print_error(
+                "Некорректная длина ключа",
+                "Длина ключа должна быть не менее 1 байта"
+            )
+            sys.exit(self.ERROR_CODES['length_invalid'])
+
+        if length > 8160:  # 255 * 32 (максимум для HKDF с SHA-256)
+            print_error(
+                "Слишком большая длина ключа",
+                f"Максимальная длина для HKDF-SHA256: 8160 байт. Запрошено: {length}"
+            )
+            sys.exit(self.ERROR_CODES['length_invalid'])
+
+        if length > 1024:
+            print_warning(f"Запрошена большая длина ключа: {length} байт")
+
+        # Валидация выходного файла (если указан)
+        output_path = None
+        if args.output:
+            try:
+                output_path = validate_file_path(args.output, for_reading=False)
+            except FileValidationError as e:
+                print_error("Проблема с выходным файлом", str(e))
+                sys.exit(self.ERROR_CODES['output_file'])
+
+        return master_key_bytes, context, length, output_path
+
     def execute_derive_operation(self, password: str, salt: bytes,
                                  iterations: int, length: int,
-                                 algorithm: str, output_path: Path = None):
+                                 output_path: Path = None):
         """
-        Выполнение операции деривации ключа.
+        Выполнение операции деривации ключа (PBKDF2).
 
         Args:
             password (str): Пароль для деривации.
             salt (bytes): Соль для деривации.
             iterations (int): Количество итераций.
             length (int): Длина выходного ключа.
-            algorithm (str): Алгоритм деривации.
             output_path (Path): Путь для сохранения ключа (опционально).
         """
         try:
-            if algorithm == 'pbkdf2':
-                # Вычисление ключа с помощью PBKDF2-HMAC-SHA256
-                derived_key = pbkdf2_hmac_sha256(
-                    password=password,
-                    salt=salt,
-                    iterations=iterations,
-                    dklen=length
-                )
-            else:
-                print_error("Неподдерживаемый алгоритм", f"Алгоритм {algorithm} не реализован")
-                sys.exit(self.ERROR_CODES['kdf_error'])
+            # Вычисление ключа с помощью PBKDF2-HMAC-SHA256
+            derived_key = pbkdf2_hmac_sha256(
+                password=password,
+                salt=salt,
+                iterations=iterations,
+                dklen=length
+            )
 
             key_hex = derived_key.hex()
             salt_hex = salt.hex()
@@ -205,8 +294,44 @@ class CryptoApp:
             del password
 
         except Exception as e:
-            print_error("Ошибка при получении ключа", str(e))
+            print_error("Ошибка при получении ключа (PBKDF2)", str(e))
             sys.exit(self.ERROR_CODES['kdf_error'])
+
+    def execute_hkdf_operation(self, master_key: bytes, context: str,
+                               length: int, output_path: Path = None):
+        """
+        Выполнение операции деривации ключа с помощью HKDF.
+
+        Args:
+            master_key (bytes): Мастер-ключ для деривации.
+            context (str): Контекст для деривации.
+            length (int): Длина выходного ключа.
+            output_path (Path): Путь для сохранения ключа (опционально).
+        """
+        try:
+            # Вычисление производного ключа
+            derived_key = derive_key(
+                master_key=master_key,
+                context=context,
+                length=length
+            )
+
+            key_hex = derived_key.hex()
+
+            if output_path:
+                with open(output_path, 'wb') as f:
+                    f.write(derived_key)
+                print_info(f"Ключ ({length} байт) записан в файл: {output_path}")
+
+            # Вывод в формате [OK] <CONTEXT> <KEY>
+            print(f"[OK] {context} {key_hex}")
+
+        except ValueError as e:
+            print_error("Ошибка валидации параметров HKDF", str(e))
+            sys.exit(self.ERROR_CODES['hkdf_error'])
+        except Exception as e:
+            print_error("Ошибка при получении ключа (HKDF)", str(e))
+            sys.exit(self.ERROR_CODES['hkdf_error'])
 
     def validate_aad(self, aad_hex: str) -> bytes:
         """
@@ -670,6 +795,42 @@ class CryptoApp:
             print_error("Ошибка при вычислении HMAC", str(e))
             sys.exit(self.ERROR_CODES['hash_operation_error'])
 
+    def determine_derive_algorithm(self, args) -> str:
+        """
+        Определение алгоритма деривации по переданным аргументам.
+
+        Args:
+            args: Аргументы командной строки.
+
+        Returns:
+            str: 'hkdf' или 'pbkdf2'.
+        """
+        has_master_key = args.master_key is not None
+        has_context = args.context is not None
+        has_password = args.password is not None
+
+        # Проверка на конфликт аргументов
+        if has_password and (has_master_key or has_context):
+            print_error(
+                "Конфликт аргументов",
+                "Нельзя использовать --password вместе с --master-key/--context. "
+                "Выберите PBKDF2 (-p) или HKDF (-msk -con)."
+            )
+            sys.exit(self.ERROR_CODES['derive_args_conflict'])
+
+        # Определение алгоритма
+        if has_master_key or has_context:
+            return 'hkdf'
+        elif has_password:
+            return 'pbkdf2'
+        else:
+            # Ничего не указано — показываем справку
+            print_error(
+                "Не указан источник ключа",
+                "Укажите --password (-p) для PBKDF2 или --master-key (-msk) и --context (-con) для HKDF"
+            )
+            sys.exit(self.ERROR_CODES['derive_args_conflict'])
+
     def run(self):
         """
         Главный метод запуска приложения.
@@ -688,17 +849,28 @@ class CryptoApp:
                     input_path, output_path = self.validate_hash_arguments(args)
                     self.execute_hash_operation(args.algorithm, input_path, output_path)
 
-            # Команда derive (CLI-1)
+            # Команда derive
             elif args.command == 'derive':
-                password, salt, iterations, length, output_path = self.validate_derive_arguments(args)
-                self.execute_derive_operation(
-                    password=password,
-                    salt=salt,
-                    iterations=iterations,
-                    length=length,
-                    algorithm=args.algorithm,
-                    output_path=output_path
-                )
+                # Автоматическое определение алгоритма
+                algorithm = self.determine_derive_algorithm(args)
+
+                if algorithm == 'pbkdf2':
+                    password, salt, iterations, length, output_path = self.validate_derive_arguments(args)
+                    self.execute_derive_operation(
+                        password=password,
+                        salt=salt,
+                        iterations=iterations,
+                        length=length,
+                        output_path=output_path
+                    )
+                elif algorithm == 'hkdf':
+                    master_key, context, length, output_path = self.validate_hkdf_arguments(args)
+                    self.execute_hkdf_operation(
+                        master_key=master_key,
+                        context=context,
+                        length=length,
+                        output_path=output_path
+                    )
 
             # Основная команда (шифрование/дешифрование)
             elif args.command is None:

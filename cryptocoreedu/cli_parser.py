@@ -77,43 +77,53 @@ def create_parser():
 
     derive_parser = subparsers.add_parser(
         'derive',
-        help='Получение ключа из пароля (PBKDF2)',
+        help='Получение ключа (PBKDF2 из пароля или HKDF из мастер-ключа)',
         allow_abbrev=False
     )
 
+    # === Аргументы для PBKDF2 ===
     derive_parser.add_argument(
         '--password', '-p',
         type=str,
-        required=True,
-        help='Пароль для генерации ключа'
+        default=None,
+        help='Пароль для генерации ключа (PBKDF2)'
     )
 
     derive_parser.add_argument(
         '--salt', '-s',
         type=str,
         default=None,
-        help='Соль в hex формате (если не указана, генерируется случайная 16-байтная)'
+        help='Соль в hex формате (для PBKDF2, если не указана — генерируется)'
     )
 
     derive_parser.add_argument(
         '--iterations', '-c',
         type=int,
         default=100000,
-        help='Количество итераций (по умолчанию: 100000)'
+        help='Количество итераций (для PBKDF2, по умолчанию: 100000)'
     )
 
+    # === Аргументы для HKDF ===
+    derive_parser.add_argument(
+        '--master-key', '-msk',
+        type=str,
+        default=None,
+        help='Мастер-ключ в hex формате (HKDF)'
+    )
+
+    derive_parser.add_argument(
+        '--context', '-con',
+        type=str,
+        default=None,
+        help='Контекст для деривации ключа (HKDF)'
+    )
+
+    # === Общие аргументы ===
     derive_parser.add_argument(
         '--length', '-l',
         type=int,
         default=32,
         help='Длина выходного ключа в байтах (по умолчанию: 32)'
-    )
-
-    derive_parser.add_argument(
-        '--algorithm', '-alg',
-        choices=['pbkdf2'],
-        default='pbkdf2',
-        help='Алгоритм получения ключа (по умолчанию: pbkdf2)'
     )
 
     derive_parser.add_argument(

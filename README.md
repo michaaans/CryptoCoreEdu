@@ -10,7 +10,7 @@
 pip install cryptocoreedu
 
 # Или конкретной версии
-pip install cryptocoreedu==2.0.1
+pip install cryptocoreedu==2.0.2
 ```
 
 ### Способ 2: Установка из исходного кода
@@ -18,7 +18,10 @@ pip install cryptocoreedu==2.0.1
 # Клонируйте репозиторий
 git clone https://github.com/michaaans/CryptoCoreEdu.git
 cd CryptoCoreEdu
-
+# Установите виртуальное окружение
+python3 -m venv vevn
+# Активируйте виртуальное окружение
+source venv/bin/activate
 # Установите в режиме разработки
 pip install -e .
 ```

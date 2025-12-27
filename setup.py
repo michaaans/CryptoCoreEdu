@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="cryptocoreedu",
-    version="2.0.1",  # ОБНОВЛЕНИЕ ВЕРСИИ ПРИ КАЖДОМ ВЫПУСКЕ
+    version="2.0.2",  # ОБНОВЛЕНИЕ ВЕРСИИ ПРИ КАЖДОМ ВЫПУСКЕ
     packages=find_packages(exclude=["tests", "tests.*"]),
     description="Educational cryptography toolkit with AES, SHA-256, SHA3-256, HMAC, PBKDF2",
     long_description=open("README.md", "r", encoding="utf-8").read(),
